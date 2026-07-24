@@ -23,3 +23,9 @@ mhc   <- snakemake@params$mhc
 annot <- data.table(locus=character(), cs=integer(), variant_id=character(),
                     pip=numeric(), gene=character(), consequence=character())
 fwrite(annot, snakemake@output$annot, sep = "\t")
+
+# ---- PLOTS (§5 report) ----
+# One PIP / regional plot per locus, written INTO the directory() output. The count is
+# data-dependent, so we emit a directory rather than named files. Scaffold just creates
+# the dir so the rule succeeds; the loop above will fill it with <locus>.pip.png files.
+dir.create(snakemake@output$plotdir, showWarnings = FALSE, recursive = TRUE)

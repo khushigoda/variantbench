@@ -52,15 +52,21 @@ rule all:
         # Step 2 LDSC
         expand("results/ldsc/{metab}.h2.log", metab=METABOLITES),
         "results/ldsc/rg.tsv",
+        "results/ldsc/rg_heatmap.png",
+        "results/ldsc/h2_barplot.png",
         # Step 3 lead variants
         expand("results/loci/{metab}.lead.tsv", metab=METABOLITES),
         expand("results/loci/{metab}.manhattan.png", metab=METABOLITES),
         # Step 4 fine-mapping
         expand("results/finemap/{metab}.annot.tsv", metab=METABOLITES),
+        expand("results/finemap/{metab}_plots", metab=METABOLITES),
         # Step 5 coloc
         expand("results/coloc/{metab}.coloc.tsv", metab=METABOLITES),
+        expand("results/coloc/{metab}.regional.png", metab=METABOLITES),
         # Step 6 genome-wide MR
         expand("results/mr/{metab}.{outcome}.gwmr.tsv", metab=METABOLITES, outcome=OUTCOMES),
+        expand("results/mr/{metab}.{outcome}.scatter.png", metab=METABOLITES, outcome=OUTCOMES),
+        expand("results/mr/{metab}.{outcome}.loo.png", metab=METABOLITES, outcome=OUTCOMES),
         # Step 7 cis-MR
         expand("results/cismr/{metab}.{outcome}.cismr.tsv", metab=METABOLITES, outcome=OUTCOMES),
         # Step 8 report
@@ -122,11 +128,16 @@ rule ldsc_h2:
         """
 
 rule ldsc_rg:
-    input:  expand("results/ldsc/{metab}.sumstats.gz", metab=METABOLITES)
-    output: "results/ldsc/rg.tsv"
+    input:
+        sumstats=expand("results/ldsc/{metab}.sumstats.gz", metab=METABOLITES),
+        h2=expand("results/ldsc/{metab}.h2.log", metab=METABOLITES)
+    output:
+        rg="results/ldsc/rg.tsv",
+        rg_plot="results/ldsc/rg_heatmap.png",     # genetic-correlation heatmap (§3)
+        h2_plot="results/ldsc/h2_barplot.png"      # h2 +/- SE bar across metabolites (§3)
     params: ld=config["ref"]["ld_scores"], ldsc_env=config["envs"]["ldsc"]
     conda:  config["envs"]["r"]
-    script: "scripts/02_ldsc_rg.R"     # thin wrapper: calls ldsc --rg, parses logs -> tsv
+    script: "scripts/02_ldsc_rg.R"     # runs ldsc --rg, parses h2/rg logs -> tsv + plots
 
 # =========================================================
 # Step 3 — lead variants & loci
@@ -152,7 +163,11 @@ rule finemap:
         meta="results/meta/{metabolite}.meta.tsv.gz",
         lead="results/loci/{metabolite}.lead.tsv"
     output:
-        annot="results/finemap/{metabolite}.annot.tsv"
+        annot="results/finemap/{metabolite}.annot.tsv",
+        # Number of loci is data-dependent, so we can't name each PNG in advance.
+        # A directory() output lets the script drop one PIP/regional plot per locus
+        # inside it while keeping the DAG valid.
+        plotdir=directory("results/finemap/{metabolite}_plots")
     params:
         panel=config["ref"]["geno_panel"],
         mhc=config["params"]["mhc_region"]
@@ -164,7 +179,9 @@ rule finemap:
 # =========================================================
 rule coloc:
     input:  meta="results/meta/{metabolite}.meta.tsv.gz"
-    output: "results/coloc/{metabolite}.coloc.tsv"
+    output:
+        tsv="results/coloc/{metabolite}.coloc.tsv",
+        plot="results/coloc/{metabolite}.regional.png"   # metabolite vs eQTL overlay (§6)
     params:
         eqtl=config["ref"]["eqtl_dataset"],
         priors=config["params"]["coloc_priors"],
@@ -179,7 +196,10 @@ rule gwmr:
     input:
         exposure="results/meta/{metabolite}.meta.tsv.gz",
         outcome="results/norm/{outcome}.norm.tsv.gz"
-    output: "results/mr/{metabolite}.{outcome}.gwmr.tsv"
+    output:
+        tsv="results/mr/{metabolite}.{outcome}.gwmr.tsv",
+        scatter="results/mr/{metabolite}.{outcome}.scatter.png",   # SNP effect exp vs out
+        loo="results/mr/{metabolite}.{outcome}.loo.png"            # leave-one-out (§7)
     params:
         r2=config["params"]["clump_r2_instr"],
         maf=config["params"]["maf_min"],
@@ -210,12 +230,20 @@ rule cismr:
 rule report:
     input:
         meta=expand("results/meta/{metab}.meta.tsv.gz", metab=METABOLITES),
+        concordance=expand("results/meta/{metab}.concordance.png", metab=METABOLITES),
         h2=expand("results/ldsc/{metab}.h2.log", metab=METABOLITES),
         rg="results/ldsc/rg.tsv",
+        rg_plot="results/ldsc/rg_heatmap.png",
+        h2_plot="results/ldsc/h2_barplot.png",
         lead=expand("results/loci/{metab}.lead.tsv", metab=METABOLITES),
+        manhattan=expand("results/loci/{metab}.manhattan.png", metab=METABOLITES),
         annot=expand("results/finemap/{metab}.annot.tsv", metab=METABOLITES),
+        finemap_plots=expand("results/finemap/{metab}_plots", metab=METABOLITES),
         coloc=expand("results/coloc/{metab}.coloc.tsv", metab=METABOLITES),
+        coloc_plot=expand("results/coloc/{metab}.regional.png", metab=METABOLITES),
         mr=expand("results/mr/{metab}.{outcome}.gwmr.tsv", metab=METABOLITES, outcome=OUTCOMES),
+        mr_scatter=expand("results/mr/{metab}.{outcome}.scatter.png", metab=METABOLITES, outcome=OUTCOMES),
+        mr_loo=expand("results/mr/{metab}.{outcome}.loo.png", metab=METABOLITES, outcome=OUTCOMES),
         cismr=expand("results/cismr/{metab}.{outcome}.cismr.tsv", metab=METABOLITES, outcome=OUTCOMES)
     output: "report/report.html"
     conda:  config["envs"]["r"]

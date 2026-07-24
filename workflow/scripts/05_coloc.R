@@ -18,4 +18,11 @@ locus  <- snakemake@params$locus   # list(chr=, gene=)
 
 res <- data.table(metabolite=snakemake@wildcards$metabolite, gene=locus$gene,
                  PP.H0=NA_real_, PP.H1=NA_real_, PP.H2=NA_real_, PP.H3=NA_real_, PP.H4=NA_real_)
-fwrite(res, snakemake@output[[1]], sep = "\t")
+fwrite(res, snakemake@output$tsv, sep = "\t")
+
+# ---- PLOT (§6 report) ----
+# Regional overlay: metabolite -log10(p) vs eQTL -log10(p) across the locus, coloured by
+# LD to the lead SNP; annotate PP.H4. Scaffold writes a valid empty PNG.
+# TODO: two-panel or shared-x regional plot around locus$gene.
+suppressMessages(library(ggplot2))
+ggsave(snakemake@output$plot, ggplot() + theme_void(), width = 6, height = 4, dpi = 120)
