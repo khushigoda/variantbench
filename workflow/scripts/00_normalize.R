@@ -1,7 +1,10 @@
 #!/usr/bin/env Rscript
 # Step 0 — normalize a raw sumstats file to the canonical "spine".
 # Invoked by rules normalize_metabolite and normalize_outcome.
-# snakemake@input[[1]]  : raw file (metabolite .tsv.gz GRCh38, or outcome .tsv GRCh37)
+# snakemake@input[[1]]  : raw file. Builds by source:
+#     metabolites .tsv.gz          -> GRCh38 (no liftover)
+#     CAD .h.tsv.gz (harmonised)   -> GRCh38 (no liftover)
+#     T2D .tsv.gz (DIAGRAM/hg19)    -> GRCh37 (Step 0 lifts to GRCh38)
 # snakemake@output[[1]] : results/norm/<dataset>.norm.tsv.gz
 # snakemake@params$build: source genome build
 suppressMessages({library(data.table)})

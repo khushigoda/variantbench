@@ -27,12 +27,15 @@ meta_name: meta_EUR            # validation target accession key
 # ---- Outcomes (MR, Steps 6-7) ----
 outcomes:
   CAD:
-    accession: GCST90132314    # EUR-only (181,522 cases). NB paper used GCST90132315 (multi-anc)
-    build: GRCh37              # -> lifted to GRCh38 in Step 0
+    accession: GCST90132314    # EUR-only (181,522 cases) — ancestry-matched to EUR instruments;
+                               # this is also what the authors' released code used.
+    accession_alt: GCST90132315  # multi-ancestry (210,842 cases) — the accession the paper's
+                                 # Methods cite; also downloaded (harmonised) for a sensitivity check.
+    build: GRCh38              # harmonised file from GWAS Catalog is already GRCh38 -> NO liftover
     type: cc                   # case/control
   T2D:
-    file: T2D.Suzuki2024.EUR.tsv.gz   # manual DIAGRAM download
-    build: GRCh37
+    file: T2D.Suzuki2024.EUR.tsv.gz   # manual DIAGRAM download (DIAMANTE/T2DGGI EUR)
+    build: GRCh37              # DIAGRAM serves hg19/GRCh37 ONLY -> Step 0 STILL lifts T2D to GRCh38
     type: cc
 
 # ---- Reference data ----

@@ -47,20 +47,29 @@ Step-1 meta-analysis against (beta-vs-beta correlation should be ≈1).
 | Outcome | Source | Type | Role |
 |---|---|---|---|
 | **T2D** (type-2 diabetes) | Suzuki et al. 2024 (DIAGRAM), EUR | case/control | **Primary** outcome for BCAA — the relationship with the strongest prior evidence. |
-| **CAD** (coronary artery disease) | GWAS Catalog `GCST90132314`, EUR-only | case/control | Broader cardiovascular comparator; both metabolites tested against it. |
+| **CAD** (coronary artery disease) | GWAS Catalog `GCST90132314` (EUR-only, primary) + `GCST90132315` (multi-ancestry, sensitivity), harmonised GRCh38 | case/control | Broader cardiovascular comparator; both metabolites tested against it. |
 
 **Why CAD/T2D:** these are the two cardiometabolic endpoints most strongly tied to BCAA
 and lactate biology, both have large well-powered European GWAS with public summary
 statistics, and both are case/control so MR returns an interpretable **log-odds-ratio per
 SD of metabolite**.
 
-**Deliberate divergence from the reference paper — documented, not accidental:** for CAD I
-use the **European-only** study `GCST90132314`, whereas the paper used the multi-ancestry
-`GCST90132315`. Reason: my exposure is a European meta-analysis, so an ancestry-matched
-outcome keeps LD structure and allele frequencies consistent between exposure and outcome.
-Ancestry mismatch is a known source of bias in two-sample MR and LDSC genetic correlation.
-This trades some case count for a cleaner causal contrast; the tradeoff is stated in the
-report's limitations.
+**Deliberate choice on the CAD accession — documented, not accidental:** the paper's Methods
+cite the multi-ancestry study `GCST90132315`, but the authors' *released code* actually reads
+the **European-only** `GCST90132314` (their `Aragam_2022_GCST90132314_harmonized.parquet`) —
+a paper-vs-code discrepancy I verified against their GitHub repo. I pull **both**: I use the
+EUR-only `GCST90132314` as the **primary** outcome (ancestry-matched to my European exposure,
+keeping LD structure and allele frequencies consistent — ancestry mismatch is a known source
+of bias in two-sample MR and LDSC), and keep the multi-ancestry `GCST90132315` as a
+**sensitivity check** (more cases, larger power). The tradeoff is stated in the report's
+limitations.
+
+**Genome build / liftover:** I download the GWAS Catalog **harmonised** CAD files, which are
+already lifted to GRCh38 (`genome_assembly: GRCh38` in the file metadata), matching my GRCh38
+metabolite exposures — so **CAD needs no liftover**. T2D is different: DIAGRAM serves the
+Suzuki 2024 sumstats in **GRCh37/hg19 only**, so T2D **still requires a GRCh37→GRCh38 liftover**
+in Step 0 before MR harmonisation. This asymmetry is intentional and handled by the per-outcome
+`build:` field in the config (Step 0 lifts only when `build == GRCh37`).
 
 ---
 

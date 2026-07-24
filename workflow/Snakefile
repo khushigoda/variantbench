@@ -38,7 +38,8 @@ def metab_raw(wildcards):
 def outcome_raw(wildcards):
     o = config["outcomes"][wildcards.outcome]
     if "accession" in o:
-        return f"data/raw/{wildcards.outcome}.{o['accession']}.buildGRCh37.tsv"
+        # GWAS Catalog harmonised sumstats (already GRCh38): <acc>.h.tsv.gz
+        return f"data/raw/{wildcards.outcome}.{o['accession']}.h.tsv.gz"
     return f"data/raw/{o['file']}"
 
 # =========================================================
