@@ -8,52 +8,309 @@ output:
     toc: true
     toc_float: true
     df_print: paged
+    number_sections: true
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.align = "center")
 library(data.table); library(ggplot2); library(DT)
-sm <- snakemake   # inputs wired by the `report` rule
+sm <- snakemake   # S4 object; inputs wired by the `report` rule in the Snakefile
+
+# ---- helpers (make tomorrow "plug data in and knit") ----------------------
+# Read one tsv defensively: empty/absent -> NULL (so scaffold runs never error).
+read_tsv1 <- function(path) tryCatch(fread(path), error = function(e) NULL)
+
+# Read several tsvs and stack them, tagging each row with its source file.
+read_many <- function(paths) {
+  rbindlist(lapply(paths, function(p) {
+    d <- read_tsv1(p)
+    if (!is.null(d) && nrow(d)) d[, source_file := basename(p)]
+    d
+  }), fill = TRUE, use.names = TRUE)
+}
+
+# Render a table, or a placeholder line if there are no rows yet.
+show_table <- function(dt, caption = NULL) {
+  if (is.null(dt) || nrow(dt) == 0) {
+    cat("*No rows yet — this table populates when the pipeline runs on real data.*\n\n")
+    return(invisible(NULL))
+  }
+  DT::datatable(dt, caption = caption, rownames = FALSE,
+                options = list(pageLength = 10, scrollX = TRUE))
+}
+
+# Embed figures that actually exist (skips scaffold-empty paths cleanly).
+show_figs <- function(paths) {
+  paths <- paths[file.exists(paths) & file.info(paths)$size > 0]
+  if (length(paths)) knitr::include_graphics(paths) else invisible(NULL)
+}
+
+# Parse "Total Observed scale h2: X (SE)" and "Intercept: X (SE)" from an LDSC .log.
+parse_h2_log <- function(path) {
+  txt <- tryCatch(readLines(path), error = function(e) character(0))
+  grab <- function(key) {
+    ln <- grep(key, txt, value = TRUE)
+    if (!length(ln)) return(c(NA_real_, NA_real_))
+    m <- regmatches(ln[1], regexec("([-0-9.]+)\\s*\\(([-0-9.]+)\\)", ln[1]))[[1]]
+    if (length(m) == 3) as.numeric(m[2:3]) else c(NA_real_, NA_real_)
+  }
+  h2 <- grab("Total Observed scale h2:"); it <- grab("Intercept:")
+  data.table(h2 = h2[1], h2_se = h2[2], intercept = it[1], intercept_se = it[2])
+}
 ```
 
-# 1. Overview & method choices
-<!-- TODO: 2-3 paragraphs. Why summary-stats workflow; two metabolites chosen; the
-     out-of-sample-LD limitation stated up front. -->
+# Overview & method choices
 
-# 2. Meta-analysis (Step 1)
-```{r meta}
-# TODO: read results/meta/*.meta.tsv.gz; show N loci, concordance plot, validation r vs published meta.
+This report follows two circulating metabolites — **total branched-chain amino acids
+(BCAA)** and **lactate** — from published GWAS summary statistics through a standard
+post-GWAS causal-inference chain: cross-cohort meta-analysis, heritability and genetic
+correlation (LDSC), lead-variant definition, statistical fine-mapping, colocalization with
+gene expression, and Mendelian randomization against two cardiometabolic diseases. **No
+individual-level genotype data is used** — every step operates on summary statistics plus a
+public LD reference.
+
+The two exposures are chosen as a **control–contrast pair**. **BCAA is the positive
+control**: a reproducible marker of insulin resistance that prospectively predicts type-2
+diabetes, with genetics anchored by the well-understood catabolic regulators *PPM1K* and
+*BCKDK*, so the full arc (GWAS → fine-mapped coding gene → colocalization → *cis*-MR →
+disease) is expected to close. **Lactate is the contrast**: different biology (glycolysis),
+a weaker causal prior, and a notable locus at *GP6* (platelet collagen receptor) that is
+biologically distant from a metabolic mechanism — a test of whether the methods correctly
+report a *less* compelling causal picture. Two exposures on different chromosomes and
+pathways demonstrate that the pipeline **discriminates**, rather than merely runs.
+
+**Method choice stated up front — the LD reference is out-of-sample.** Fine-mapping,
+clumping, and MR instrument pruning use a 1000 Genomes EUR panel, **not** the in-sample UKBB
+LD the reference paper used. Out-of-sample LD can miscalibrate SuSiE credible sets and
+mis-prune instruments; this is an accepted tractability tradeoff, flagged here and again in
+each affected section. A second deliberate divergence: for CAD I use the **European-only**
+outcome GWAS (`GCST90132314`) rather than the paper's multi-ancestry study, to keep exposure
+and outcome ancestry-matched and avoid a known source of two-sample MR bias.
+
+# Meta-analysis (Step 1)
+
+*Inverse-variance fixed-effect meta-analysis of EstBB + UKBB (EUR). Validation: my meta
+effect sizes are regressed against the published meta-analysis — the slope/correlation
+should be ≈1 if the harmonization and weighting are correct.*
+
+```{r meta-table}
+meta_files <- sm@input$meta
+meta_summary <- rbindlist(lapply(meta_files, function(p) {
+  d <- read_tsv1(p); if (is.null(d)) return(NULL)
+  data.table(metabolite = sub("\\.meta\\.tsv\\.gz$", "", basename(p)),
+             n_variants  = nrow(d),
+             n_gws       = if ("pval" %in% names(d)) sum(d$pval < 5e-8, na.rm = TRUE) else NA_integer_)
+}), fill = TRUE)
+show_table(meta_summary, "Meta-analysis summary per metabolite")
 ```
 
-# 3. Heritability & genetic correlation (Step 2, LDSC)
-```{r ldsc}
-# TODO: parse h2 logs -> h2 +/- SE bar; rg.tsv -> heatmap. Interpret LDSC intercept.
+```{r meta-fig}
+show_figs(sm@input$concordance)   # EstBB vs UKBB beta concordance (+ validation r)
 ```
 
-# 4. Lead variants (Step 3)
-```{r loci}
-# TODO: Manhattan per metabolite; lead-variant table (DT::datatable).
+# Heritability & genetic correlation (Step 2, LDSC)
+
+*SNP-heritability per metabolite and genetic correlation between them. The **LDSC intercept**
+is the key diagnostic: an intercept ≈1 means test-statistic inflation reflects polygenic
+signal, not population stratification or cryptic relatedness.*
+
+```{r ldsc-table}
+h2_tab <- rbindlist(lapply(sm@input$h2, function(p) {
+  cbind(metabolite = sub("\\.h2\\.log$", "", basename(p)), parse_h2_log(p))
+}), fill = TRUE)
+show_table(h2_tab, "LDSC SNP-heritability and intercept")
+rg_tab <- read_tsv1(sm@input$rg)
+show_table(rg_tab, "Genetic correlation (rg) between metabolites")
 ```
 
-# 5. Fine-mapping + coding annotation (Step 4)
-```{r finemap}
-# TODO: credible-set table; highlight fine-mapped missense -> effector gene.
+```{r ldsc-fig}
+show_figs(c(sm@input$h2_plot, sm@input$rg_plot))
 ```
 
-# 6. Colocalization (Step 5)
-```{r coloc}
-# TODO: PP.H4 table; regional overlay for the top locus.
+# Lead variants (Step 3)
+
+*Genome-wide-significant loci (p < 5e-8), LD-clumped (r² < 0.05, 2 Mb window) to independent
+lead variants. Clumping — not fixed intervals — because many neighbouring significant SNPs
+tag a single causal signal through LD.*
+
+```{r loci-table}
+lead_tab <- read_many(sm@input$lead)
+show_table(lead_tab, "Independent lead variants per metabolite")
 ```
 
-# 7. Mendelian randomization (Steps 6-7)
-```{r mr}
-# TODO: genome-wide MR forest (metabolite -> CAD/T2D); cis-MR per gene (BCKDK/DBT/PPM1K).
-# Discuss the 3 MR assumptions and why cis-MR is pleiotropy-robust.
+```{r loci-fig}
+show_figs(sm@input$manhattan)
 ```
 
-# 8. Limitations
-<!-- TODO: out-of-sample LD; single-causal-variant coloc assumption; palindromic SNP
-     handling; EUR-only generalizability; power of cis-MR. -->
+# Fine-mapping + coding annotation (Step 4)
 
-# 9. MCQ appendix
-<!-- The 7 MCQs (one per analytical step), each answerable only via the analysis above. -->
+*SuSiE fine-mapping per locus (MHC excluded), then missense/splice annotation of credible-set
+variants to nominate a candidate effector gene. **Caveat:** out-of-sample LD may miscalibrate
+credible sets — interpret set sizes and PIPs with that in mind.*
+
+```{r finemap-table}
+annot_tab <- read_many(sm@input$annot)
+show_table(annot_tab, "Credible-set variants and coding annotation")
+```
+
+```{r finemap-fig}
+# per-locus PIP / regional plots live in the directory() outputs
+finemap_pngs <- unlist(lapply(sm@input$finemap_plots,
+                              function(d) list.files(d, "\\.png$", full.names = TRUE)))
+show_figs(finemap_pngs)
+```
+
+# Colocalization (Step 5)
+
+*coloc.abf between each metabolite and a molecular QTL at its effector locus. **PP.H4** is the
+posterior for a single shared causal variant; **PP.H3** (distinct variants) is the key
+competing hypothesis to rule out.*
+
+```{r coloc-table}
+coloc_tab <- read_many(sm@input$coloc)
+show_table(coloc_tab, "Colocalization posteriors (PP.H0–H4)")
+```
+
+```{r coloc-fig}
+show_figs(sm@input$coloc_plot)
+```
+
+# Mendelian randomization (Steps 6–7)
+
+*Two MR designs. **Genome-wide MR** (IVW + MR-Egger + weighted median) uses all independent
+instruments; the Egger intercept flags directional pleiotropy. **cis-MR** restricts
+instruments to the effector locus (BCAA → BCKDK/DBT/PPM1K; Lactate → GP6) — a drug-target
+design that is more robust to horizontal pleiotropy because the instruments act through a
+known mechanism. This is the mechanistically strongest causal test in the pipeline.*
+
+```{r mr-table}
+gwmr_tab <- read_many(sm@input$mr)
+show_table(gwmr_tab, "Genome-wide MR estimates (metabolite → outcome)")
+cismr_tab <- read_many(sm@input$cismr)
+show_table(cismr_tab, "cis-MR estimates (effector gene → outcome)")
+```
+
+```{r mr-forest}
+# Cross-pair forest, assembled here from all *.gwmr.tsv (per the report-reads-results design).
+if (!is.null(gwmr_tab) && nrow(gwmr_tab) &&
+    all(c("b", "se", "method", "source_file") %in% names(gwmr_tab))) {
+  d <- copy(gwmr_tab)[method == "IVW"]
+  d[, pair := sub("\\.gwmr\\.tsv$", "", source_file)]
+  d[, `:=`(lo = b - 1.96 * se, hi = b + 1.96 * se)]
+  fp <- ggplot(d, aes(x = b, y = pair)) +
+    geom_vline(xintercept = 0, linetype = 2, colour = "grey60") +
+    geom_point() + geom_errorbarh(aes(xmin = lo, xmax = hi), height = 0.2) +
+    labs(x = "IVW log-OR per SD metabolite (95% CI)", y = NULL,
+         title = "Genome-wide MR: metabolite → disease") +
+    theme_bw()
+  print(fp)
+}
+```
+
+```{r mr-fig}
+show_figs(c(sm@input$mr_scatter, sm@input$mr_loo))
+```
+
+# Limitations
+
+- **Out-of-sample LD.** Fine-mapping, clumping and MR pruning use 1000G EUR LD rather than
+  in-sample LD; credible sets and instrument sets may be miscalibrated. This is the single
+  most important caveat and is the main methodological divergence from the reference paper.
+- **Single-causal-variant assumption in coloc.** `coloc.abf` assumes one causal variant per
+  trait per locus; allelic heterogeneity violates it. A credible-set–based coloc (e.g.
+  coloc-SuSiE / CLPP) would relax this — noted as a possible extension.
+- **Palindromic / ambiguous SNPs.** A/T and C/G instruments are dropped (or strand-resolved
+  by allele frequency) during MR harmonization; aggressive dropping costs power.
+- **EUR-only.** Exposure and outcomes are European-ancestry, so estimates may not generalize
+  to other populations — but this is a deliberate choice to keep LD and allele frequencies
+  matched across exposure and outcome.
+- **cis-MR power.** Few independent instruments in a narrow cis window can leave wide
+  confidence intervals; a null cis-MR is not the same as evidence of no effect.
+
+# MCQ appendix
+
+*Seven multiple-choice items, one per analytical step, each testing the **biological
+reasoning** behind that step rather than an implementation detail. Questions are phrased as
+conditionals ("if the pipeline returns X …"), so they test interpretation and can be
+instantiated with the run's actual numbers without changing the concept being assessed.
+Correct answer and a one-line rationale follow each item.*
+
+**Q1 — Meta-analysis.** A variant is genome-wide significant in the EstBB + UKBB meta-analysis
+but reached significance in neither cohort alone. The most appropriate interpretation is:
+
+- A. The meta-analysis has inflated type-I error, so the hit is probably false.
+- B. Increased sample size raised power; concordant same-direction effects combined to cross the threshold.
+- C. The variant must have opposite effects in the two cohorts.
+- D. It indicates a batch effect between cohorts.
+
+*Answer: **B.** Meta-analysis gains power precisely when per-cohort effects are concordant; a
+sub-threshold-but-consistent signal crossing genome-wide significance is the expected behaviour,
+not an artifact.*
+
+**Q2 — Heritability (LDSC).** The LDSC regression for BCAA returns an intercept ≈ 1.0. This
+indicates:
+
+- A. Severe population stratification inflating all test statistics.
+- B. Minimal confounding; inflation in the test statistics reflects genuine polygenic signal.
+- C. The heritability estimate is invalid.
+- D. Severe sample overlap between the two cohorts.
+
+*Answer: **B.** The LDSC intercept isolates confounding/inflation from polygenicity; an intercept
+near 1 means the elevated χ² comes from real polygenic signal, validating the h² estimate.*
+
+**Q3 — Lead variants.** Independent loci are defined by LD clumping (r² threshold) rather than by
+taking the top SNP in fixed genomic windows because:
+
+- A. Clumping is computationally faster.
+- B. Many significant SNPs in a region tag one causal signal via LD; clumping collapses them to independent signals.
+- C. Fixed windows cannot span multiple chromosomes.
+- D. Clumping removes the need for a reference panel.
+
+*Answer: **B.** LD makes neighbouring hits statistically redundant; clumping (which uses an LD
+panel) yields genuinely independent lead variants instead of over-counting one signal.*
+
+**Q4 — Fine-mapping.** The pipeline fine-maps with an out-of-sample 1000G EUR LD reference. The
+primary risk to the credible sets is:
+
+- A. They will always be too small.
+- B. LD mismatch can miscalibrate posterior inclusion probabilities and yield spurious or oversized credible sets.
+- C. SuSiE cannot run at all without in-sample LD.
+- D. It only affects the Manhattan plot, not fine-mapping.
+
+*Answer: **B.** SuSiE-RSS assumes the LD matrix matches the GWAS sample; a mismatched reference
+distorts PIPs and credible-set membership — the headline caveat of this analysis.*
+
+**Q5 — Colocalization.** `coloc.abf` returns a high PP.H4 for BCAA at the *BCKDK* locus against a
+liver eQTL. This supports:
+
+- A. Distinct causal variants drive the metabolite and expression signals.
+- B. A single shared causal variant likely drives both the BCAA association and *BCKDK* expression.
+- C. *BCKDK* is not expressed in liver.
+- D. The metabolite association is a false positive.
+
+*Answer: **B.** PP.H4 is the posterior for one shared causal variant; a high value is evidence the
+metabolite signal acts through *BCKDK* expression. The competing hypothesis to exclude is PP.H3
+(two distinct variants).*
+
+**Q6 — Genome-wide MR.** For BCAA → T2D, IVW is significant while the MR-Egger intercept is
+non-significant. The non-significant intercept indicates:
+
+- A. Severe directional pleiotropy, so IVW is invalid.
+- B. No strong evidence of directional pleiotropy, so the IVW estimate is less likely to be biased by it.
+- C. The instruments are weak.
+- D. Reverse causation is present.
+
+*Answer: **B.** The MR-Egger intercept tests for directional (unbalanced) horizontal pleiotropy; a
+non-significant intercept increases confidence that the IVW causal estimate is not driven by it.*
+
+**Q7 — cis-MR.** Restricting instruments to the *BCKDK* locus (cis-MR) is considered more robust to
+horizontal pleiotropy than genome-wide MR because:
+
+- A. It uses more instruments.
+- B. cis instruments at the gene encoding the metabolite's regulator act through a known mechanism, limiting alternative pleiotropic pathways.
+- C. It does not require an LD reference.
+- D. It is immune to weak-instrument bias.
+
+*Answer: **B.** cis-MR (a drug-target design) ties the instrument to a specific mechanism, so the
+exclusion-restriction assumption is far more defensible than for genome-wide instruments — at the
+cost of fewer instruments and lower power (see Limitations).*
