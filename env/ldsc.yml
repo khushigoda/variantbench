@@ -1,0 +1,3 @@
+# Regenerate with:  conda env export -n ldsc --no-builds > env/ldsc.yml
+# (placeholder until you export the real lockfile)
+name: ldsc

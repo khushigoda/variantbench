@@ -15,3 +15,6 @@ results/**/*.bed
 !results/**/*.summary.tsv
 !results/**/*.png
 !results/**/*.csv
+report/*_files/
+.tmp/
+__pycache__/

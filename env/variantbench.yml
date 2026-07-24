@@ -1,0 +1,3 @@
+# Regenerate with:  conda env export -n variantbench --no-builds > env/variantbench.yml
+# (placeholder until you export the real lockfile)
+name: variantbench

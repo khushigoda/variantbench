@@ -1,0 +1,59 @@
+---
+title: "VariantBench — Metabolite GWAS Follow-up (BCAA & Lactate)"
+author: "Khushi Goda"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: true
+    toc: true
+    toc_float: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(data.table); library(ggplot2); library(DT)
+sm <- snakemake   # inputs wired by the `report` rule
+```
+
+# 1. Overview & method choices
+<!-- TODO: 2-3 paragraphs. Why summary-stats workflow; two metabolites chosen; the
+     out-of-sample-LD limitation stated up front. -->
+
+# 2. Meta-analysis (Step 1)
+```{r meta}
+# TODO: read results/meta/*.meta.tsv.gz; show N loci, concordance plot, validation r vs published meta.
+```
+
+# 3. Heritability & genetic correlation (Step 2, LDSC)
+```{r ldsc}
+# TODO: parse h2 logs -> h2 +/- SE bar; rg.tsv -> heatmap. Interpret LDSC intercept.
+```
+
+# 4. Lead variants (Step 3)
+```{r loci}
+# TODO: Manhattan per metabolite; lead-variant table (DT::datatable).
+```
+
+# 5. Fine-mapping + coding annotation (Step 4)
+```{r finemap}
+# TODO: credible-set table; highlight fine-mapped missense -> effector gene.
+```
+
+# 6. Colocalization (Step 5)
+```{r coloc}
+# TODO: PP.H4 table; regional overlay for the top locus.
+```
+
+# 7. Mendelian randomization (Steps 6-7)
+```{r mr}
+# TODO: genome-wide MR forest (metabolite -> CAD/T2D); cis-MR per gene (BCKDK/DBT/PPM1K).
+# Discuss the 3 MR assumptions and why cis-MR is pleiotropy-robust.
+```
+
+# 8. Limitations
+<!-- TODO: out-of-sample LD; single-causal-variant coloc assumption; palindromic SNP
+     handling; EUR-only generalizability; power of cis-MR. -->
+
+# 9. MCQ appendix
+<!-- The 7 MCQs (one per analytical step), each answerable only via the analysis above. -->

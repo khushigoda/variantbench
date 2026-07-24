@@ -1,0 +1,61 @@
+# VariantBench pipeline configuration
+# Everything variable lives here; the Snakefile reads it and expands wildcards.
+# Edit this file to add metabolites/outcomes — no code changes needed.
+
+genome_build: GRCh38          # target build; CAD/T2D are lifted to this
+
+# ---- Exposures (metabolites) ----
+metabolites:
+  BCAA:
+    accession:
+      EstBB:    GCST90449544
+      UKBB_EUR: GCST90449793
+      meta_EUR: GCST90451287        # published meta — used to VALIDATE our Step 1
+    cis_genes: [BCKDK, DBT, PPM1K]   # for Step 7 cis-MR (drug-target)
+    coloc_locus: {chr: 16, gene: BCKDK}
+  Lactate:
+    accession:
+      EstBB:    GCST90449404
+      UKBB_EUR: GCST90449653
+      meta_EUR: GCST90451147
+    cis_genes: [GP6]
+    coloc_locus: {chr: 19, gene: GP6}
+
+cohorts:   [EstBB, UKBB_EUR]   # meta-analysis inputs (Step 1)
+meta_name: meta_EUR            # validation target accession key
+
+# ---- Outcomes (MR, Steps 6-7) ----
+outcomes:
+  CAD:
+    accession: GCST90132314    # EUR-only (181,522 cases). NB paper used GCST90132315 (multi-anc)
+    build: GRCh37              # -> lifted to GRCh38 in Step 0
+    type: cc                   # case/control
+  T2D:
+    file: T2D.Suzuki2024.EUR.tsv.gz   # manual DIAGRAM download
+    build: GRCh37
+    type: cc
+
+# ---- Reference data ----
+ref:
+  hm3_snplist: data/ref/w_hm3.snplist        # (A) LDSC       — Step 2
+  ld_scores:   data/ref/eur_w_ld_chr/        # (A) LD SCORES  — Step 2 only
+  geno_panel:  data/ref/1kg_eur_grch38       # (B) LD MATRIX  — Steps 3,4,6,7 (PLINK bfile prefix)
+  eqtl_dataset: QTD000584                    # Step 5: eQTL Catalogue dataset id (edit once locus chosen)
+
+# ---- Analysis parameters ----
+params:
+  gws_p:          5.0e-8        # genome-wide significance
+  locus_window:   2000000       # lead-variant locus width (Step 3)
+  clump_r2_lead:  0.05          # merge neighbouring loci
+  clump_r2_instr: 0.01          # MR instrument pruning
+  cis_window:     200000        # +/- bp for cis-MR (Step 7)
+  maf_min:        0.01          # MR instrument MAF floor
+  info_min:       0.6           # imputation INFO QC (metabolites)
+  coloc_priors:   {p1: 1.0e-4, p2: 1.0e-4, p12: 5.0e-6}
+  mhc_region:     {chr: 6, start: 28510120, end: 33480577}  # excluded in fine-mapping
+
+# ---- Tool environments (conda env names on this machine) ----
+envs:
+  main: variantbench      # python/snakemake/plink/bcftools
+  r:    variantbench-r    # all R steps
+  ldsc: ldsc              # Step 2 only (Python-2, Rosetta)

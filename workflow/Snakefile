@@ -1,0 +1,218 @@
+# VariantBench — Snakemake workflow
+# Config-driven: metabolites, cohorts, outcomes all come from config/config.yaml.
+# Run a dry-run to see the whole DAG:   snakemake -n
+# Draw it:                              snakemake --dag | dot -Tsvg > dag.svg
+# Build everything:                     snakemake --cores 4
+
+configfile: "config/config.yaml"
+
+# ---------- derived lists from config ----------
+METABOLITES = list(config["metabolites"].keys())
+COHORTS     = config["cohorts"]
+OUTCOMES    = list(config["outcomes"].keys())
+META        = config["meta_name"]
+
+# per-metabolite cis genes (flattened {metab}/{gene} pairs for Step 7)
+CIS_PAIRS = [(m, g) for m in METABOLITES for g in config["metabolites"][m]["cis_genes"]]
+
+# Constrain wildcards to their known vocabularies so the two normalize rules
+# (metabolite: {metabolite}.{cohort}.norm  vs  outcome: {outcome}.norm) can never
+# cross-match. Without this, "BCAA.EstBB" also matches the outcome pattern and
+# Snakemake throws InputFunctionExceptions while exploring the DAG.
+wildcard_constraints:
+    metabolite = "|".join(METABOLITES),
+    cohort     = "|".join(COHORTS),
+    outcome    = "|".join(OUTCOMES),
+    metab      = "|".join(METABOLITES)
+
+# ---------- helpers to resolve raw input paths ----------
+def metab_raw(wildcards):
+    """Raw per-cohort metabolite sumstats for Step 0."""
+    acc = config["metabolites"][wildcards.metabolite]["accession"][wildcards.cohort]
+    return f"data/raw/{wildcards.metabolite}_{wildcards.cohort}.{acc}.tsv.gz"
+
+def outcome_raw(wildcards):
+    o = config["outcomes"][wildcards.outcome]
+    if "accession" in o:
+        return f"data/raw/{wildcards.outcome}.{o['accession']}.buildGRCh37.tsv"
+    return f"data/raw/{o['file']}"
+
+# =========================================================
+# rule all — final targets (build the whole pipeline)
+# =========================================================
+rule all:
+    input:
+        # Step 1 meta + validation
+        expand("results/meta/{metab}.meta.tsv.gz", metab=METABOLITES),
+        expand("results/meta/{metab}.concordance.png", metab=METABOLITES),
+        # Step 2 LDSC
+        expand("results/ldsc/{metab}.h2.log", metab=METABOLITES),
+        "results/ldsc/rg.tsv",
+        # Step 3 lead variants
+        expand("results/loci/{metab}.lead.tsv", metab=METABOLITES),
+        expand("results/loci/{metab}.manhattan.png", metab=METABOLITES),
+        # Step 4 fine-mapping
+        expand("results/finemap/{metab}.annot.tsv", metab=METABOLITES),
+        # Step 5 coloc
+        expand("results/coloc/{metab}.coloc.tsv", metab=METABOLITES),
+        # Step 6 genome-wide MR
+        expand("results/mr/{metab}.{outcome}.gwmr.tsv", metab=METABOLITES, outcome=OUTCOMES),
+        # Step 7 cis-MR
+        expand("results/cismr/{metab}.{outcome}.cismr.tsv", metab=METABOLITES, outcome=OUTCOMES),
+        # Step 8 report
+        "report/report.html"
+
+# =========================================================
+# Step 0 — normalize raw sumstats to the common "spine"
+# =========================================================
+rule normalize_metabolite:
+    input:  metab_raw
+    output: "results/norm/{metabolite}.{cohort}.norm.tsv.gz"
+    params: build=config["genome_build"], info_min=config["params"]["info_min"]
+    conda:  config["envs"]["r"]
+    script: "scripts/00_normalize.R"
+
+rule normalize_outcome:
+    input:  outcome_raw
+    output: "results/norm/{outcome}.norm.tsv.gz"
+    params: build=lambda w: config["outcomes"][w.outcome]["build"]
+    conda:  config["envs"]["r"]
+    script: "scripts/00_normalize.R"
+
+# =========================================================
+# Step 1 — meta-analysis (EstBB + UKBB_EUR -> meta)
+# =========================================================
+rule meta_analysis:
+    input:  expand("results/norm/{{metabolite}}.{cohort}.norm.tsv.gz", cohort=COHORTS)
+    output:
+        meta="results/meta/{metabolite}.meta.tsv.gz",
+        plot="results/meta/{metabolite}.concordance.png"
+    params: gws_p=config["params"]["gws_p"]
+    conda:  config["envs"]["r"]
+    script: "scripts/01_meta.R"
+
+# =========================================================
+# Step 2 — heritability & genetic correlation (LDSC, Python-2 env)
+# =========================================================
+rule ldsc_munge:
+    input:  "results/meta/{metabolite}.meta.tsv.gz"
+    output: "results/ldsc/{metabolite}.sumstats.gz"
+    params: hm3=config["ref"]["hm3_snplist"], ldsc_env=config["envs"]["ldsc"]
+    shell:
+        r"""
+        conda run -n {params.ldsc_env} python ~/ldsc/munge_sumstats.py \
+            --sumstats <(zcat {input}) --merge-alleles {params.hm3} \
+            --out results/ldsc/{wildcards.metabolite} \
+            --a1 ea --a2 oa --p pval --N-col n --signed-sumstats beta,0
+        """
+
+rule ldsc_h2:
+    input:  "results/ldsc/{metabolite}.sumstats.gz"
+    output: "results/ldsc/{metabolite}.h2.log"
+    params: ld=config["ref"]["ld_scores"], ldsc_env=config["envs"]["ldsc"]
+    shell:
+        r"""
+        conda run -n {params.ldsc_env} python ~/ldsc/ldsc.py \
+            --h2 {input} --ref-ld-chr {params.ld} --w-ld-chr {params.ld} \
+            --out results/ldsc/{wildcards.metabolite}.h2
+        """
+
+rule ldsc_rg:
+    input:  expand("results/ldsc/{metab}.sumstats.gz", metab=METABOLITES)
+    output: "results/ldsc/rg.tsv"
+    params: ld=config["ref"]["ld_scores"], ldsc_env=config["envs"]["ldsc"]
+    conda:  config["envs"]["r"]
+    script: "scripts/02_ldsc_rg.R"     # thin wrapper: calls ldsc --rg, parses logs -> tsv
+
+# =========================================================
+# Step 3 — lead variants & loci
+# =========================================================
+rule lead_variants:
+    input:  meta="results/meta/{metabolite}.meta.tsv.gz"
+    output:
+        lead="results/loci/{metabolite}.lead.tsv",
+        plot="results/loci/{metabolite}.manhattan.png"
+    params:
+        gws_p=config["params"]["gws_p"],
+        window=config["params"]["locus_window"],
+        r2=config["params"]["clump_r2_lead"],
+        panel=config["ref"]["geno_panel"]
+    conda:  config["envs"]["r"]
+    script: "scripts/03_leadvars.R"
+
+# =========================================================
+# Step 4 — fine-mapping (SuSiE) + missense/splice annotation
+# =========================================================
+rule finemap:
+    input:
+        meta="results/meta/{metabolite}.meta.tsv.gz",
+        lead="results/loci/{metabolite}.lead.tsv"
+    output:
+        annot="results/finemap/{metabolite}.annot.tsv"
+    params:
+        panel=config["ref"]["geno_panel"],
+        mhc=config["params"]["mhc_region"]
+    conda:  config["envs"]["r"]
+    script: "scripts/04_finemap.R"
+
+# =========================================================
+# Step 5 — colocalization with molecular QTLs (coloc.abf)
+# =========================================================
+rule coloc:
+    input:  meta="results/meta/{metabolite}.meta.tsv.gz"
+    output: "results/coloc/{metabolite}.coloc.tsv"
+    params:
+        eqtl=config["ref"]["eqtl_dataset"],
+        priors=config["params"]["coloc_priors"],
+        locus=lambda w: config["metabolites"][w.metabolite]["coloc_locus"]
+    conda:  config["envs"]["r"]
+    script: "scripts/05_coloc.R"
+
+# =========================================================
+# Step 6 — genome-wide MR (metabolite -> outcome)
+# =========================================================
+rule gwmr:
+    input:
+        exposure="results/meta/{metabolite}.meta.tsv.gz",
+        outcome="results/norm/{outcome}.norm.tsv.gz"
+    output: "results/mr/{metabolite}.{outcome}.gwmr.tsv"
+    params:
+        r2=config["params"]["clump_r2_instr"],
+        maf=config["params"]["maf_min"],
+        gws_p=config["params"]["gws_p"],
+        panel=config["ref"]["geno_panel"]
+    conda:  config["envs"]["r"]
+    script: "scripts/06_gwmr.R"
+
+# =========================================================
+# Step 7 — cis-MR (drug-target)
+# =========================================================
+rule cismr:
+    input:
+        exposure="results/meta/{metabolite}.meta.tsv.gz",
+        outcome="results/norm/{outcome}.norm.tsv.gz"
+    output: "results/cismr/{metabolite}.{outcome}.cismr.tsv"
+    params:
+        cis_window=config["params"]["cis_window"],
+        r2=config["params"]["clump_r2_instr"],
+        genes=lambda w: config["metabolites"][w.metabolite]["cis_genes"],
+        panel=config["ref"]["geno_panel"]
+    conda:  config["envs"]["r"]
+    script: "scripts/07_cismr.R"
+
+# =========================================================
+# Step 8 — report (Rmd -> self-contained HTML)
+# =========================================================
+rule report:
+    input:
+        meta=expand("results/meta/{metab}.meta.tsv.gz", metab=METABOLITES),
+        h2=expand("results/ldsc/{metab}.h2.log", metab=METABOLITES),
+        rg="results/ldsc/rg.tsv",
+        lead=expand("results/loci/{metab}.lead.tsv", metab=METABOLITES),
+        annot=expand("results/finemap/{metab}.annot.tsv", metab=METABOLITES),
+        coloc=expand("results/coloc/{metab}.coloc.tsv", metab=METABOLITES),
+        mr=expand("results/mr/{metab}.{outcome}.gwmr.tsv", metab=METABOLITES, outcome=OUTCOMES),
+        cismr=expand("results/cismr/{metab}.{outcome}.cismr.tsv", metab=METABOLITES, outcome=OUTCOMES)
+    output: "report/report.html"
+    conda:  config["envs"]["r"]
+    script: "scripts/08_report.Rmd"
