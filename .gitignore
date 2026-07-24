@@ -1,0 +1,17 @@
+# --- data & large/derived files: NEVER commit ---
+data/
+results/**/*.tsv.gz
+results/**/*.bed
+*.bed
+*.bim
+*.fam
+*.bcor
+*.sumstats.gz
+.snakemake/
+# --- OS / editor noise ---
+.DS_Store
+*.swp
+# --- but DO keep small result tables & plots so the repo tells the story ---
+!results/**/*.summary.tsv
+!results/**/*.png
+!results/**/*.csv
