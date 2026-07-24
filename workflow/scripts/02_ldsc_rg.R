@@ -4,6 +4,7 @@
 # snakemake@input  : results/ldsc/<metab>.sumstats.gz (all metabolites)
 # snakemake@output : results/ldsc/rg.tsv
 suppressMessages({library(data.table)})
+set.seed(snakemake@params$seed)   # reproducibility: global seed from config
 
 sumstats <- unlist(snakemake@input)
 ld       <- "data/ref/eur_w_ld_chr/"

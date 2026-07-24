@@ -4,6 +4,7 @@
 # snakemake@output$meta : results/meta/<metab>.meta.tsv.gz
 # snakemake@output$plot : results/meta/<metab>.concordance.png
 suppressMessages({library(data.table); library(ggplot2)})
+set.seed(snakemake@params$seed)   # reproducibility: global seed from config
 
 files <- snakemake@input
 a <- fread(files[[1]]); b <- fread(files[[2]])

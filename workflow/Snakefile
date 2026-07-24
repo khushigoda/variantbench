@@ -78,14 +78,14 @@ rule all:
 rule normalize_metabolite:
     input:  metab_raw
     output: "results/norm/{metabolite}.{cohort}.norm.tsv.gz"
-    params: build=config["genome_build"], info_min=config["params"]["info_min"]
+    params: seed=config["params"]["seed"], build=config["genome_build"], info_min=config["params"]["info_min"]
     conda:  config["envs"]["r"]
     script: "scripts/00_normalize.R"
 
 rule normalize_outcome:
     input:  outcome_raw
     output: "results/norm/{outcome}.norm.tsv.gz"
-    params: build=lambda w: config["outcomes"][w.outcome]["build"]
+    params: seed=config["params"]["seed"], build=lambda w: config["outcomes"][w.outcome]["build"]
     conda:  config["envs"]["r"]
     script: "scripts/00_normalize.R"
 
@@ -97,7 +97,7 @@ rule meta_analysis:
     output:
         meta="results/meta/{metabolite}.meta.tsv.gz",
         plot="results/meta/{metabolite}.concordance.png"
-    params: gws_p=config["params"]["gws_p"]
+    params: seed=config["params"]["seed"], gws_p=config["params"]["gws_p"]
     conda:  config["envs"]["r"]
     script: "scripts/01_meta.R"
 
@@ -135,7 +135,7 @@ rule ldsc_rg:
         rg="results/ldsc/rg.tsv",
         rg_plot="results/ldsc/rg_heatmap.png",     # genetic-correlation heatmap (§3)
         h2_plot="results/ldsc/h2_barplot.png"      # h2 +/- SE bar across metabolites (§3)
-    params: ld=config["ref"]["ld_scores"], ldsc_env=config["envs"]["ldsc"]
+    params: seed=config["params"]["seed"], ld=config["ref"]["ld_scores"], ldsc_env=config["envs"]["ldsc"]
     conda:  config["envs"]["r"]
     script: "scripts/02_ldsc_rg.R"     # runs ldsc --rg, parses h2/rg logs -> tsv + plots
 
@@ -148,6 +148,7 @@ rule lead_variants:
         lead="results/loci/{metabolite}.lead.tsv",
         plot="results/loci/{metabolite}.manhattan.png"
     params:
+        seed=config["params"]["seed"],
         gws_p=config["params"]["gws_p"],
         window=config["params"]["locus_window"],
         r2=config["params"]["clump_r2_lead"],
@@ -169,6 +170,7 @@ rule finemap:
         # inside it while keeping the DAG valid.
         plotdir=directory("results/finemap/{metabolite}_plots")
     params:
+        seed=config["params"]["seed"],
         panel=config["ref"]["geno_panel"],
         mhc=config["params"]["mhc_region"]
     conda:  config["envs"]["r"]
@@ -183,6 +185,7 @@ rule coloc:
         tsv="results/coloc/{metabolite}.coloc.tsv",
         plot="results/coloc/{metabolite}.regional.png"   # metabolite vs eQTL overlay (§6)
     params:
+        seed=config["params"]["seed"],
         eqtl=config["ref"]["eqtl_dataset"],
         priors=config["params"]["coloc_priors"],
         locus=lambda w: config["metabolites"][w.metabolite]["coloc_locus"]
@@ -201,6 +204,7 @@ rule gwmr:
         scatter="results/mr/{metabolite}.{outcome}.scatter.png",   # SNP effect exp vs out
         loo="results/mr/{metabolite}.{outcome}.loo.png"            # leave-one-out (§7)
     params:
+        seed=config["params"]["seed"],
         r2=config["params"]["clump_r2_instr"],
         maf=config["params"]["maf_min"],
         gws_p=config["params"]["gws_p"],
@@ -217,6 +221,7 @@ rule cismr:
         outcome="results/norm/{outcome}.norm.tsv.gz"
     output: "results/cismr/{metabolite}.{outcome}.cismr.tsv"
     params:
+        seed=config["params"]["seed"],
         cis_window=config["params"]["cis_window"],
         r2=config["params"]["clump_r2_instr"],
         genes=lambda w: config["metabolites"][w.metabolite]["cis_genes"],
@@ -246,5 +251,6 @@ rule report:
         mr_loo=expand("results/mr/{metab}.{outcome}.loo.png", metab=METABOLITES, outcome=OUTCOMES),
         cismr=expand("results/cismr/{metab}.{outcome}.cismr.tsv", metab=METABOLITES, outcome=OUTCOMES)
     output: "report/report.html"
+    params: seed=config["params"]["seed"]
     conda:  config["envs"]["r"]
     script: "scripts/08_report.Rmd"

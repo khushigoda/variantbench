@@ -3,6 +3,7 @@
 # This is the email's GOOD-example step (e.g. BCKDK/DBT/PPM1K -> BCAA -> T2D).
 # snakemake@input$exposure / $outcome ; params: cis_window, r2, genes, panel
 suppressMessages({library(data.table); library(MendelianRandomization)})
+set.seed(snakemake@params$seed)   # reproducibility: global seed from config
 
 exp <- fread(snakemake@input$exposure)
 out <- fread(snakemake@input$outcome)

@@ -4,6 +4,7 @@
 # NOTE: LD is OUT-OF-SAMPLE 1000G EUR (paper used in-sample UKBB LD) -> credible sets can
 #       be miscalibrated. DOCUMENT this in the report; it is a scoring point.
 suppressMessages({library(data.table); library(susieR)})
+set.seed(snakemake@params$seed)   # reproducibility: global seed from config
 
 meta  <- fread(snakemake@input$meta)
 lead  <- fread(snakemake@input$lead)

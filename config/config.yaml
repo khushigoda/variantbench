@@ -44,6 +44,7 @@ ref:
 
 # ---- Analysis parameters ----
 params:
+  seed:           2024          # global RNG seed; set in every R step for reproducibility
   gws_p:          5.0e-8        # genome-wide significance
   locus_window:   2000000       # lead-variant locus width (Step 3)
   clump_r2_lead:  0.05          # merge neighbouring loci

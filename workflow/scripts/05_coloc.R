@@ -2,6 +2,7 @@
 # Step 5 — colocalization (coloc.abf) between the metabolite and a molecular QTL at a locus.
 # snakemake@input$meta ; snakemake@output ; params: eqtl dataset, priors, locus
 suppressMessages({library(data.table); library(coloc)})
+set.seed(snakemake@params$seed)   # reproducibility: global seed from config
 
 meta   <- fread(snakemake@input$meta)
 eqtl   <- snakemake@params$eqtl

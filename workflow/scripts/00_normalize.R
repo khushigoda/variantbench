@@ -5,6 +5,7 @@
 # snakemake@output[[1]] : results/norm/<dataset>.norm.tsv.gz
 # snakemake@params$build: source genome build
 suppressMessages({library(data.table)})
+set.seed(snakemake@params$seed)   # reproducibility: global seed from config
 
 infile  <- snakemake@input[[1]]
 outfile <- snakemake@output[[1]]

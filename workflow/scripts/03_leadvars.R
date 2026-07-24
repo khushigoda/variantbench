@@ -4,6 +4,7 @@
 # snakemake@output$lead  : results/loci/<metab>.lead.tsv
 # snakemake@output$plot  : results/loci/<metab>.manhattan.png
 suppressMessages({library(data.table); library(ggplot2)})
+set.seed(snakemake@params$seed)   # reproducibility: global seed from config
 
 meta  <- fread(snakemake@input$meta)
 gws   <- snakemake@params$gws_p

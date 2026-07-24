@@ -2,6 +2,7 @@
 # Step 6 — genome-wide Mendelian randomization: metabolite (exposure) -> disease (outcome).
 # snakemake@input$exposure / $outcome ; snakemake@output
 suppressMessages({library(data.table); library(MendelianRandomization)})
+set.seed(snakemake@params$seed)   # reproducibility: global seed from config
 
 exp <- fread(snakemake@input$exposure)
 out <- fread(snakemake@input$outcome)

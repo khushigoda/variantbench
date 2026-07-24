@@ -15,6 +15,7 @@ output:
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.align = "center")
 library(data.table); library(ggplot2); library(DT)
 sm <- snakemake   # S4 object; inputs wired by the `report` rule in the Snakefile
+set.seed(sm@params$seed)   # reproducibility: global seed from config
 
 # ---- helpers (make tomorrow "plug data in and knit") ----------------------
 # Read one tsv defensively: empty/absent -> NULL (so scaffold runs never error).
