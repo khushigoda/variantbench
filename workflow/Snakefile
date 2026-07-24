@@ -1,10 +1,14 @@
 # VariantBench — Snakemake workflow
 # Config-driven: metabolites, cohorts, outcomes all come from config/config.yaml.
-# Run a dry-run to see the whole DAG:   snakemake -n
-# Draw it:                              snakemake --dag | dot -Tsvg > dag.svg
-# Build everything:                     snakemake --cores 4
-
-configfile: "config/config.yaml"
+# Run from the repo ROOT (recommended so results/ land at the top level):
+#   cd ~/variantbench && snakemake -n
+# Draw it:        snakemake --dag | dot -Tsvg > dag.svg
+# Build:          snakemake --cores 4
+#
+# Config path is resolved RELATIVE TO THIS Snakefile (workflow.basedir/../config),
+# so the "configfile not present" error can't happen no matter where you invoke from.
+import os
+configfile: os.path.normpath(os.path.join(workflow.basedir, "..", "config", "config.yaml"))
 
 # ---------- derived lists from config ----------
 METABOLITES = list(config["metabolites"].keys())
