@@ -58,16 +58,26 @@ for acc in GCST90132314 GCST90132315; do
      "$CAD_DIR/$acc/harmonised/${acc}.h.tsv.gz"
 done
 
-# T2D — Suzuki et al. 2024 (DIAMANTE / T2DGGI). Download the European-ancestry sumstats
-# from the DIAGRAM downloads page (agreement required):
+# T2D — Suzuki et al. 2024 (DIAMANTE / T2DGGI). MANUAL download (agreement required),
+# NOT scriptable via curl. Both ancestry sets from the DIAGRAM downloads page:
 #   https://www.diagram-consortium.org/downloads.html
+#   - EUR_Metal_LDSC-CORR_Neff.v2.txt  (European-only)   -> primary (ancestry-matched)
+#   - All_Metal_LDSC-CORR_Neff.v2.txt  (multi-ancestry)  -> sensitivity check
 # BUILD NOTE: DIAGRAM serves these ONLY in GRCh37/hg19 (confirmed in their
-#   DIAMANTE_summary_statistics_download.pdf: "chromosome and position (hg19, build 37)").
+#   T2DGGI_GWAS_summary_statistics.pdf: "chromosome and position (hg19, build 37)").
 #   There is NO pre-harmonised GRCh38 download for T2D (unlike CAD on the GWAS Catalog).
-#   => T2D STILL requires GRCh37 -> GRCh38 liftover in Step 0 before MR harmonisation.
-#   The authors did their own liftover here (their Suzuki_2024_..._harmonized.parquet).
-# Save the EUR file as: $RAW/T2D.Suzuki2024.EUR.tsv.gz
-echo ">> T2D: download manually from DIAGRAM (GRCh37) -> $RAW/T2D.Suzuki2024.EUR.tsv.gz"
+#   => T2D STILL requires GRCh37 -> GRCh38 liftover in Step 0 before downstream analysis.
+#   The authors did their own liftover here it seems from code (their Suzuki_2024_..._harmonized.parquet).
+# HEADER NOTE: first column is spelled "Chromsome" (sic) in the source files;
+#   00_normalize.R must map that exact string.
+#
+# After downloading, place + rename + compress (run from repo root):
+#   mv ~/Downloads/EUR_Metal_LDSC-CORR_Neff.v2.txt $RAW/T2D.Suzuki2024.EUR.tsv
+#   mv ~/Downloads/All_Metal_LDSC-CORR_Neff.v2.txt $RAW/T2D.Suzuki2024.All.tsv
+#   gzip $RAW/T2D.Suzuki2024.EUR.tsv   # -> T2D.Suzuki2024.EUR.tsv.gz
+#   gzip $RAW/T2D.Suzuki2024.All.tsv   # -> T2D.Suzuki2024.All.tsv.gz
+echo ">> T2D: place manually-downloaded DIAGRAM files (GRCh37):"
+echo "        $RAW/T2D.Suzuki2024.EUR.tsv.gz (primary), $RAW/T2D.Suzuki2024.All.tsv.gz (sensitivity)"
 
 # ---- 3. LDSC reference data (Step 2) ----
 echo ">> HapMap3 snplist"

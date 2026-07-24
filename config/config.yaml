@@ -34,7 +34,8 @@ outcomes:
     build: GRCh38              # harmonised file from GWAS Catalog is already GRCh38 -> NO liftover
     type: cc                   # case/control
   T2D:
-    file: T2D.Suzuki2024.EUR.tsv.gz   # manual DIAGRAM download (DIAMANTE/T2DGGI EUR)
+    file: T2D.Suzuki2024.EUR.tsv.gz       # manual DIAGRAM download (DIAMANTE/T2DGGI EUR) — primary
+    file_alt: T2D.Suzuki2024.All.tsv.gz   # multi-ancestry DIAMANTE — sensitivity check
     build: GRCh37              # DIAGRAM serves hg19/GRCh37 ONLY -> Step 0 STILL lifts T2D to GRCh38
     type: cc
 
