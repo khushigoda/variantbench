@@ -61,6 +61,12 @@ parse_h2_log <- function(path) {
 
 # Overview & method choices
 
+> **Reproducibility.** This document is the R Markdown source `workflow/scripts/08_report.Rmd`,
+> knitted by the Snakemake `report` rule. Every number, table, and figure below is generated
+> at knit time by reading the pipeline's output files in `results/` — nothing is hand-entered
+> or pasted. Re-running the pipeline and re-knitting regenerates this report end to end, so the
+> report cannot drift from the analysis it describes.
+
 This report follows two circulating metabolites — **total branched-chain amino acids
 (BCAA)** and **lactate** — from published GWAS summary statistics through a standard
 post-GWAS causal-inference chain: cross-cohort meta-analysis, heritability and genetic
