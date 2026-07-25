@@ -36,15 +36,28 @@ def metab_raw_file(metabolite, cohort):
     acc = config["metabolites"][metabolite]["accession"][cohort]
     return f"data/raw/{metabolite}_{cohort}.{acc}.tsv.gz"
 
+def raw_by_tag(metabolite, tag):
+    """Raw per-tag sumstats path; tag is a cohort (EstBB/UKBB_EUR) or the meta accession."""
+    acc = config["metabolites"][metabolite]["accession"][tag]
+    return f"data/raw/{metabolite}_{tag}.{acc}.tsv.gz"
+
+# Columns each raw file contributes to its per-chr split (1-based GWAS-SSF positions).
+# Cohorts carry rsid (col 9) + n (col 13); the published meta has no rsid, n is col 11.
+SPLIT_COLS = {
+    "EstBB":    "1,2,3,4,5,6,7,9,13",
+    "UKBB_EUR": "1,2,3,4,5,6,7,9,13",
+    "metaEUR":  "1,2,3,4,5,6",   # validation join needs only chr,pos,ea,oa,beta,se
+}
+
 def meta_inputs(wildcards):
-    """Step 1 reads the two EUR cohorts directly + the published meta as a validation
-    target (NOT a meta input). No Step-0 normalized intermediate is produced."""
+    """Step 1 (GENOME-WIDE, chr-streamed) reads PER-CHROMOSOME split dirs for the two
+    EUR cohorts + the published meta (validation). The split (rule split_by_chr) is a
+    one-decompression-pass Step-0 that makes per-chromosome reads cheap on 8 GB."""
     m = wildcards.metabolite
     return {
-        "est":  metab_raw_file(m, "EstBB"),
-        "ukbb": metab_raw_file(m, "UKBB_EUR"),
-        "val":  metab_raw_file(m, config["meta_name"]),   # published meta_EUR
-        "hm3":  config["ref"]["hm3_snplist"],             # HapMap3 snplist: variants restricted to this set (8 GB memory fix)
+        "est_dir":  f"results/split/{m}_EstBB",
+        "ukbb_dir": f"results/split/{m}_UKBB_EUR",
+        "val_dir":  f"results/split/{m}_{config['meta_name']}",   # published meta_EUR
     }
 
 # =========================================================
@@ -74,6 +87,17 @@ rule all:
 # =========================================================
 # Step 1 — meta-analysis (EstBB + UKBB_EUR -> meta), reads RAW files directly
 # =========================================================
+rule split_by_chr:
+    """Step 0 (prepare): one-pass decompress a raw .tsv.gz into per-chromosome files,
+    keeping only the columns Step 1 needs. gzip is not seekable, so this converts each
+    raw file ONCE instead of re-decompressing it per chromosome in the meta loop.
+    Output is a directory of chrN.tsv.gz (+ a .done marker)."""
+    input:  lambda w: raw_by_tag(w.metabolite, w.tag)
+    output: directory("results/split/{metabolite}_{tag}")
+    params: cols=lambda w: SPLIT_COLS[w.tag]
+    wildcard_constraints: tag="EstBB|UKBB_EUR|metaEUR"
+    shell:  "bash scripts/00_split_by_chr.sh {input} {output} {params.cols}"
+
 rule meta_analysis:
     input:  unpack(meta_inputs)
     output:

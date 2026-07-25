@@ -1,167 +1,184 @@
 #!/usr/bin/env Rscript
-# Step 1 — fixed-effect IVW meta-analysis, EstBB + UKBB_EUR -> meta.
+# Step 1 — GENOME-WIDE fixed-effect IVW meta-analysis, EstBB + UKBB_EUR -> meta.
+# Chromosome-streamed so it fits an 8 GB machine while keeping EVERY variant
+# (no HapMap3 restriction) — the genome-wide table downstream steps
+# (03 lead variants / Manhattan, 04 fine-mapping, 06/07 MR) all require.
 #
-# Reads the RAW GWAS-SSF files directly (column-selective fread; NO Step-0 normalized
-# intermediate is written). NO-FLIP join: variants are matched on chr:pos:effect:other,
-# so only identically-oriented alleles combine and single-cohort variants are retained
-# (NA weight -> 0). This mirrors the authors' metaanalysis.R and lets us OBSERVE the cost
-# of not flipping (reported as a concordance diagnostic) rather than pre-correcting.
+# WHY STREAMING: a fixed-effect meta needs both cohorts' rows for a variant
+# resident together. EstBB is 26M variants, UKBB_EUR is 96M; holding both full
+# tables + their ~100M-row union does not fit in 8 GB (swap-thrash / OOM). Even
+# the authors' metaanalysis.R accumulates the full genome-wide table before
+# writing — fine on a big node, not here. So we mirror THEIR memory device
+# (their Arrow open_dataset %>% filter(CHROM==c) reads one chromosome at a time)
+# but go one step further: we also WRITE each chromosome's result incrementally
+# (append to the gzip) and reduce validation to running SUFFICIENT STATISTICS,
+# so peak memory is ONE chromosome, never the genome.
 #
-#   input$est  : raw EstBB    .tsv.gz     input$ukbb : raw UKBB_EUR .tsv.gz
-#   input$val  : raw published meta_EUR .tsv.gz  (validation TARGET, not a meta input)
-#   output$meta    : results/meta/<metab>.meta.tsv.gz
-#   output$plot    : results/meta/<metab>.concordance.png   (EstBB beta vs UKBB beta)
-#   output$valplot : results/meta/<metab>.validation.png    (our beta vs published beta)
-#   output$valtsv  : results/meta/<metab>.validation.tsv    (r, slope, n, join counts)
+# NO-FLIP join (matches the authors): variants matched on chr:pos:effect:other,
+# so only identically-oriented alleles combine; single-cohort variants retained
+# (absent-cohort weight -> 0). We OBSERVE the cost of not flipping as a
+# concordance diagnostic rather than pre-correcting.
+#
+#   input$est_dir  : dir of per-chr EstBB    split files  (chrN.tsv.gz)
+#   input$ukbb_dir : dir of per-chr UKBB_EUR split files
+#   input$val_dir  : dir of per-chr published meta_EUR split files (validation)
+#   output$meta    : results/meta/<metab>.meta.tsv.gz      (GENOME-WIDE)
+#   output$plot    : results/meta/<metab>.concordance.png  (EstBB beta vs UKBB beta)
+#   output$valplot : results/meta/<metab>.validation.png   (our beta vs published)
+#   output$valtsv  : results/meta/<metab>.validation.tsv   (r, slope, n, counts)
 suppressMessages({library(data.table); library(ggplot2)})
 set.seed(snakemake@params$seed)   # reproducibility: global seed from config
 setDTthreads(1)                   # bound memory/CPU on the 8 GB box
 
-# GWAS-SSF columns 01 actually consumes (confirm names against 00_inspect findings).
-SEL <- c("chromosome", "base_pair_location", "effect_allele", "other_allele",
-         "beta", "standard_error", "effect_allele_frequency", "rsid", "n")
+est_dir  <- snakemake@input$est_dir
+ukbb_dir <- snakemake@input$ukbb_dir
+val_dir  <- snakemake@input$val_dir
+out_meta <- snakemake@output$meta
+metab    <- snakemake@wildcards$metabolite
 
-# MEMORY NOTE (8 GB box): the join is on (chr,pos,ea,oa) as SEPARATE columns, NOT a
-# pasted "chr:pos:ea:oa" string. A 26M-row character key vector is ~2 GB and was
-# materialized in every table (est/ukbb/m/out/val) — the main cause of swap-thrash.
-# Joining on the 4 columns is identical in result, adds zero new columns, and keeps
-# chr/pos/ea/oa populated for every outer-join row (so no key-splitting recovery).
-# chr is stored as INTEGER (1..22, X->23); non-autosomal/non-numeric contigs drop out
-# (LDSC + this analysis are autosomal EUR anyway).
 JKEY <- c("chr", "pos", "ea", "oa")
 
-# MEMORY STRATEGY (8 GB box): filter EACH cohort to the ~1.2M HapMap3 rsIDs
-# IMMEDIATELY after reading, BEFORE the join. Two full 26M-row tables do not fit
-# in 8 GB (they swap-thrash), but Step 2 (LDSC munge) discards every non-HM3
-# variant anyway, so carrying the full genome through the merge is pure waste
-# here. Post-filter each table is ~1.2M rows, so the whole join/IVW/validation
-# runs in-memory with headroom. Meta betas for the kept variants are IDENTICAL
-# to a full-genome run (IVW of a variant is independent of other variants).
-# NOTE: fine-mapping (Step 3), if run, reads the RAW files per-locus (dense,
-# tiny regions) — it does not consume this genome-wide (HM3-restricted) meta.
-hm3 <- fread(snakemake@input$hm3, select = "SNP", showProgress = FALSE)$SNP
-message(sprintf("  HapMap3 reference: %d rsIDs (variants restricted to this set)",
-                length(hm3)))
-
-read_cohort <- function(f, tag, keep_eaf = FALSE) {
-  message(sprintf("  [%s] reading %s ...", tag, basename(f)))
-  d <- fread(f, select = SEL, showProgress = FALSE)
-  setnames(d,
-    c("chromosome", "base_pair_location", "effect_allele", "other_allele",
-      "standard_error", "effect_allele_frequency"),
-    c("chr", "pos", "ea", "oa", "se", "eaf"))
-  d <- d[rsid %chin% hm3]                 # HM3 restriction FIRST -> 26M -> ~1.2M
-  message(sprintf("  [%s] %d HapMap3 variants (of file total)", tag, nrow(d)))
-  d[, chr := toupper(sub("^chr", "", as.character(chr)))]
-  d[chr == "X", chr := "23"]
-  d[, chr := suppressWarnings(as.integer(chr))]
-  d <- d[is.finite(beta) & is.finite(se) & se > 0 & !is.na(chr)]
-  d <- unique(d, by = JKEY)
-  # rsid kept in BOTH cohorts (needed to label cohort-specific rows for munge);
-  # eaf only needed from est (carried onto the meta output).
-  if (keep_eaf) d <- d[, .(chr, pos, ea, oa, eaf, beta, se, n, rsid)]
-  else          d <- d[, .(chr, pos, ea, oa, beta, se, n, rsid)]
-  message(sprintf("  [%s] %d variants after QC", tag, nrow(d)))
+# ---- read one chromosome's split file, standardize names, QC ----
+# Split files carry: chromosome base_pair_location effect_allele other_allele
+#                    beta standard_error effect_allele_frequency [rsid] n
+read_chr <- function(dir, chr_tok, chr_int) {
+  f <- file.path(dir, paste0("chr", chr_tok, ".tsv.gz"))
+  if (!file.exists(f)) return(NULL)
+  d <- fread(f, showProgress = FALSE)
+  ren <- c(chromosome = "chr", base_pair_location = "pos", effect_allele = "ea",
+           other_allele = "oa", standard_error = "se", effect_allele_frequency = "eaf")
+  setnames(d, names(ren), unname(ren), skip_absent = TRUE)
+  d <- d[is.finite(beta) & is.finite(se) & se > 0]
+  d[, chr := chr_int]                       # integer chr for this file
+  d <- unique(d, by = c("pos", "ea", "oa"))
   d
 }
 
-est  <- read_cohort(snakemake@input$est,  "EstBB",    keep_eaf = TRUE)
-ukbb <- read_cohort(snakemake@input$ukbb, "UKBB_EUR")
+# ---- discover chromosomes present (union of est + ukbb split dirs) ----
+tok_of <- function(dir) sub("\\.tsv\\.gz$", "", sub("^chr", "",
+              list.files(dir, pattern = "^chr.*\\.tsv\\.gz$")))
+toks <- union(tok_of(est_dir), tok_of(ukbb_dir))
+# map raw token -> integer chr (1..22, X->23); drop other contigs (autosomal+X EUR)
+tok2int <- function(t) { u <- toupper(t); if (u == "X") 23L else suppressWarnings(as.integer(u)) }
+toks <- toks[!is.na(vapply(toks, tok2int, integer(1)))]
+toks <- toks[order(vapply(toks, tok2int, integer(1)))]
+message(sprintf("  streaming %d chromosomes: %s", length(toks),
+                paste(toks, collapse = ",")))
 
-# ---- no-flip full (outer) join on (chr,pos,ea,oa) ----
-# rsid carried from both sides; coalesced to SNP below (both are HM3 rsIDs).
-m <- merge(
-  est[,  .(chr, pos, ea, oa, eaf, beta_e = beta, se_e = se, n_e = n, rsid_e = rsid)],
-  ukbb[, .(chr, pos, ea, oa, beta_u = beta, se_u = se, n_u = n, rsid_u = rsid)],
-  by = JKEY, all = TRUE)
-rm(est, ukbb); invisible(gc())                # both cohorts done after the merge
-message(sprintf("  merged: %d union variants", nrow(m)))
+# ---- running accumulators (all O(1) memory) ----
+vs <- c(n = 0, sx = 0, sy = 0, sxx = 0, syy = 0, sxy = 0)  # validation suff. stats
+tot <- c(n_total = 0, n_both = 0, n_est = 0, n_ukbb = 0)
+SPC <- 4000L                                # sampled points/chr for the scatter plots
+conc_smp <- vector("list", length(toks))    # concordance: (beta_e, beta_u) shared
+val_smp  <- vector("list", length(toks))    # validation:  (beta, beta_pub) matched
+if (file.exists(out_meta)) file.remove(out_meta)   # fresh append target
+first <- TRUE
 
-# per-cohort inverse-variance weights; absent cohort -> weight 0 (variant kept, single-cohort)
-m[, `:=`(w_e = fifelse(is.finite(se_e), 1 / se_e^2, 0),
-         w_u = fifelse(is.finite(se_u), 1 / se_u^2, 0),
-         b_e = fifelse(is.finite(beta_e), beta_e, 0),
-         b_u = fifelse(is.finite(beta_u), beta_u, 0))]
-m[, w_sum := w_e + w_u]
-m <- m[w_sum > 0]
+for (ci in seq_along(toks)) {
+  chr_tok <- toks[ci]; chr_int <- tok2int(chr_tok)
+  est  <- read_chr(est_dir,  chr_tok, chr_int)
+  ukbb <- read_chr(ukbb_dir, chr_tok, chr_int)
+  if (is.null(est) && is.null(ukbb)) next
+  if (is.null(est))  est  <- ukbb[0]
+  if (is.null(ukbb)) ukbb <- est[0]
 
-# fixed-effect IVW
-m[, `:=`(beta = (w_e * b_e + w_u * b_u) / w_sum,
-         se   = sqrt(1 / w_sum),
-         n    = fifelse(is.na(n_e), 0, as.numeric(n_e)) + fifelse(is.na(n_u), 0, as.numeric(n_u)),
-         n_cohorts = (w_e > 0) + (w_u > 0))]
-m[, z := beta / se]                                     # SIGNED z (sign carries direction)
-# two-sided p and -log10 p from z; -log10 p in log-space to stay underflow-safe at huge z
-m[, pval       := 2 * pnorm(-abs(z))]
-m[, neg_log10p := -(pnorm(-abs(z), log.p = TRUE) + log(2)) / log(10)]
-# 2-study Cochran's Q (1 df) — heterogeneity diagnostic only
-m[, het_q := fifelse(n_cohorts == 2, w_e * (b_e - beta)^2 + w_u * (b_u - beta)^2, NA_real_)]
-m[, het_p := fifelse(is.finite(het_q), pchisq(het_q, df = 1, lower.tail = FALSE), NA_real_)]
-m[, direction := paste0(fifelse(w_e > 0, fifelse(b_e >= 0, "+", "-"), "?"),
-                        fifelse(w_u > 0, fifelse(b_u >= 0, "+", "-"), "?"))]
+  # no-flip outer join on (chr,pos,ea,oa); rsid carried from both sides
+  m <- merge(
+    est[,  .(chr, pos, ea, oa, eaf, beta_e = beta, se_e = se, n_e = n, rsid_e = rsid)],
+    ukbb[, .(chr, pos, ea, oa, beta_u = beta, se_u = se, n_u = n, rsid_u = rsid)],
+    by = JKEY, all = TRUE)
+  rm(est, ukbb)
 
-# concordance-diagnostic counts + the both-cohort beta pairs (extract BEFORE freeing m)
-diag <- data.table(
-  n_total      = nrow(m),
-  n_both       = nrow(m[n_cohorts == 2]),
-  n_estbb_only = nrow(m[w_e > 0 & w_u == 0]),
-  n_ukbb_only  = nrow(m[w_u > 0 & w_e == 0]))
-both <- m[n_cohorts == 2, .(beta_e, beta_u)]
+  m[, `:=`(w_e = fifelse(is.finite(se_e), 1 / se_e^2, 0),
+           w_u = fifelse(is.finite(se_u), 1 / se_u^2, 0),
+           b_e = fifelse(is.finite(beta_e), beta_e, 0),
+           b_u = fifelse(is.finite(beta_u), beta_u, 0))]
+  m[, w_sum := w_e + w_u]
+  m <- m[w_sum > 0]
+  m[, `:=`(beta = (w_e * b_e + w_u * b_u) / w_sum,
+           se   = sqrt(1 / w_sum),
+           n    = fifelse(is.na(n_e), 0, as.numeric(n_e)) + fifelse(is.na(n_u), 0, as.numeric(n_u)),
+           n_cohorts = (w_e > 0) + (w_u > 0))]
+  m[, z := beta / se]                                   # SIGNED z (sign = direction)
+  m[, pval       := 2 * pnorm(-abs(z))]
+  m[, neg_log10p := -(pnorm(-abs(z), log.p = TRUE) + log(2)) / log(10)]
+  m[, het_q := fifelse(n_cohorts == 2, w_e * (b_e - beta)^2 + w_u * (b_u - beta)^2, NA_real_)]
+  m[, het_p := fifelse(is.finite(het_q), pchisq(het_q, df = 1, lower.tail = FALSE), NA_real_)]
+  m[, direction := paste0(fifelse(w_e > 0, fifelse(b_e >= 0, "+", "-"), "?"),
+                          fifelse(w_u > 0, fifelse(b_u >= 0, "+", "-"), "?"))]
+  m[, SNP := fifelse(!is.na(rsid_e), rsid_e, rsid_u)]   # coalesced native rsID
 
-# SNP = HapMap3 rsID, coalesced from whichever cohort(s) carry the variant.
-# Every row is HM3-restricted, so rsid_e/rsid_u is always present for at least one
-# cohort; both agree where both exist. LDSC munge merges to w_hm3.snplist BY rsID.
-m[, SNP := fifelse(!is.na(rsid_e), rsid_e, rsid_u)]
-out <- m[, .(SNP, chr, pos, ea, oa, eaf, beta, se, z, pval, neg_log10p, n,
-             direction, het_q, het_p, n_cohorts)]
-rm(m); invisible(gc())                          # m no longer needed
-setcolorder(out, c("SNP", "chr", "pos", "ea", "oa", "eaf", "beta", "se", "z",
-                   "pval", "neg_log10p", "n", "direction", "het_q", "het_p", "n_cohorts"))
-setorder(out, chr, pos)
-fwrite(out, snakemake@output$meta, sep = "\t", compress = "gzip")
-message(sprintf("  wrote meta table: %d variants", nrow(out)))
+  # running counts + concordance sample (both-cohort betas)
+  tot["n_total"] <- tot["n_total"] + nrow(m)
+  nb <- m[n_cohorts == 2, .N]; tot["n_both"] <- tot["n_both"] + nb
+  tot["n_est"]  <- tot["n_est"]  + m[w_e > 0 & w_u == 0, .N]
+  tot["n_ukbb"] <- tot["n_ukbb"] + m[w_u > 0 & w_e == 0, .N]
+  both <- m[n_cohorts == 2, .(beta_e, beta_u)]
+  if (nrow(both)) conc_smp[[ci]] <- both[sample(.N, min(.N, SPC))]
 
-# ---- concordance diagnostic: the cost of NOT flipping ----
-p1 <- ggplot(both, aes(beta_e, beta_u)) +
+  out <- m[, .(SNP, chr, pos, ea, oa, eaf, beta, se, z, pval, neg_log10p, n,
+               direction, het_q, het_p, n_cohorts)]
+  setorder(out, pos)
+  # INCREMENTAL WRITE: header on first chr only, append (concatenated gzip) after
+  fwrite(out, out_meta, sep = "\t", compress = "gzip",
+         append = !first, col.names = first)
+  first <- FALSE
+
+  # ---- validation for this chromosome: merge vs published, update suff. stats ----
+  val <- read_chr(val_dir, chr_tok, chr_int)   # val has no rsid col
+  if (!is.null(val)) {
+    setnames(val, "beta", "beta_pub")
+    cmp <- merge(out[, .(chr, pos, ea, oa, beta)],
+                 val[, .(chr, pos, ea, oa, beta_pub)], by = JKEY)
+    if (nrow(cmp)) {
+      x <- cmp$beta; y <- cmp$beta_pub
+      vs["n"]  <- vs["n"]  + length(x)
+      vs["sx"] <- vs["sx"] + sum(x);  vs["sy"]  <- vs["sy"]  + sum(y)
+      vs["sxx"]<- vs["sxx"]+ sum(x*x);vs["syy"] <- vs["syy"] + sum(y*y)
+      vs["sxy"]<- vs["sxy"]+ sum(x*y)
+      val_smp[[ci]] <- cmp[sample(.N, min(.N, SPC)), .(beta, beta_pub)]
+    }
+    rm(val, cmp)
+  }
+  rm(m, out, both); invisible(gc())
+  message(sprintf("  chr%-3s done | cumulative meta rows: %s", chr_tok,
+                  format(tot["n_total"], big.mark = ",")))
+}
+message(sprintf("  wrote GENOME-WIDE meta: %s variants -> %s",
+                format(tot["n_total"], big.mark = ","), out_meta))
+
+# ---- validation r + OLS slope from running sufficient statistics ----
+n <- vs["n"]
+r  <- if (n > 2) unname((n*vs["sxy"] - vs["sx"]*vs["sy"]) /
+        sqrt((n*vs["sxx"] - vs["sx"]^2) * (n*vs["syy"] - vs["sy"]^2))) else NA_real_
+sl <- if (n > 2) unname((n*vs["sxy"] - vs["sx"]*vs["sy"]) /
+        (n*vs["sxx"] - vs["sx"]^2)) else NA_real_          # slope of beta_pub ~ beta
+fwrite(data.table(metab = metab, n_compared = as.integer(n),
+                  pearson_r = r, slope = sl, n_variants = as.integer(tot["n_total"]),
+                  n_both = as.integer(tot["n_both"]),
+                  n_estbb_only = as.integer(tot["n_est"]),
+                  n_ukbb_only = as.integer(tot["n_ukbb"])),
+       snakemake@output$valtsv, sep = "\t")
+
+# ---- plots from the per-chr samples (a scatter of 100M points is unreadable) ----
+conc <- rbindlist(conc_smp); vsc <- rbindlist(val_smp)
+p1 <- ggplot(conc, aes(beta_e, beta_u)) +
   geom_point(alpha = .2, size = .5) +
-  geom_abline(slope = 1, intercept = 0, colour = "red") +
-  theme_bw() +
-  labs(title = paste(snakemake@wildcards$metabolite, "cohort concordance"),
-       subtitle = sprintf("shared (both-cohort) %s / %s total variants",
-                          format(diag$n_both, big.mark = ","),
-                          format(diag$n_total, big.mark = ",")),
+  geom_abline(slope = 1, intercept = 0, colour = "red") + theme_bw() +
+  labs(title = paste(metab, "cohort concordance (sampled)"),
+       subtitle = sprintf("shared %s / %s total variants",
+                          format(tot["n_both"], big.mark = ","),
+                          format(tot["n_total"], big.mark = ",")),
        x = "EstBB beta", y = "UKBB_EUR beta")
 ggsave(snakemake@output$plot, p1, width = 5, height = 5, dpi = 120)
-rm(both); invisible(gc())
-
-# ---- validation vs published meta_EUR (matched-orientation subset) ----
-message("  reading published meta_EUR for validation ...")
-val <- fread(snakemake@input$val,
-             select = c("chromosome", "base_pair_location", "effect_allele",
-                        "other_allele", "beta"), showProgress = FALSE)
-setnames(val, c("chr", "pos", "ea", "oa", "beta_pub"))
-val[, chr := toupper(sub("^chr", "", as.character(chr)))][chr == "X", chr := "23"]
-val[, chr := suppressWarnings(as.integer(chr))]
-val <- val[!is.na(chr)]
-val <- unique(val, by = JKEY)
-cmp <- merge(out[, .(chr, pos, ea, oa, beta)],
-             val[, .(chr, pos, ea, oa, beta_pub)], by = JKEY)
-rm(val); invisible(gc())
-r  <- if (nrow(cmp) > 2) cor(cmp$beta, cmp$beta_pub) else NA_real_
-sl <- if (nrow(cmp) > 2) unname(coef(lm(beta_pub ~ beta, cmp))[2]) else NA_real_
-fwrite(data.table(metab = snakemake@wildcards$metabolite,
-                  n_compared = nrow(cmp), pearson_r = r, slope = sl,
-                  n_both = diag$n_both, n_estbb_only = diag$n_estbb_only,
-                  n_ukbb_only = diag$n_ukbb_only),
-       snakemake@output$valtsv, sep = "\t")
-p2 <- ggplot(cmp, aes(beta, beta_pub)) +
+p2 <- ggplot(vsc, aes(beta, beta_pub)) +
   geom_point(alpha = .2, size = .5) +
-  geom_abline(slope = 1, intercept = 0, colour = "red") +
-  theme_bw() +
-  labs(title = paste(snakemake@wildcards$metabolite, "vs published meta_EUR"),
+  geom_abline(slope = 1, intercept = 0, colour = "red") + theme_bw() +
+  labs(title = paste(metab, "vs published meta_EUR (sampled)"),
        subtitle = sprintf("Pearson r = %.4f  (n = %s matched)",
-                          r, format(nrow(cmp), big.mark = ",")),
+                          r, format(as.integer(n), big.mark = ",")),
        x = "our beta_meta", y = "published meta_EUR beta")
 ggsave(snakemake@output$valplot, p2, width = 5, height = 5, dpi = 120)
-cat(sprintf("%s: meta %d variants; validation r=%.4f on %d shared\n",
-            snakemake@wildcards$metabolite, nrow(out), r, nrow(cmp)))
+cat(sprintf("%s: GENOME-WIDE meta %s variants; validation r=%.4f slope=%.3f on %s shared\n",
+            metab, format(tot["n_total"], big.mark = ","), r, sl,
+            format(as.integer(n), big.mark = ",")))
