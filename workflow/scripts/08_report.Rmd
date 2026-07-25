@@ -1,5 +1,5 @@
 ---
-title: "VariantBench — Metabolite GWAS Follow-up (BCAA & Lactate)"
+title: "VariantBench — Metabolic-Trait GWAS Follow-up (LDL_C, BCAA, Glucose, Lactate; EUR)"
 author: "Khushi Goda"
 date: "`r Sys.Date()`"
 output:
@@ -68,23 +68,26 @@ parse_h2_log <- function(path) {
 > or pasted. Re-running the pipeline and re-knitting regenerates this report end to end, so the
 > report cannot drift from the analysis it describes.
 
-This report follows two circulating metabolites — **total branched-chain amino acids
-(BCAA)** and **lactate** — from published GWAS summary statistics through a standard
-post-GWAS causal-inference chain: cross-cohort meta-analysis, heritability and genetic
-correlation (LDSC), lead-variant definition, statistical fine-mapping, colocalization with
-gene expression, and Mendelian randomization against two cardiometabolic diseases. **No
-individual-level genotype data is used** — every step operates on summary statistics plus a
-public LD reference.
+This report follows four circulating metabolic traits — **LDL cholesterol (LDL_C)**, **total
+branched-chain amino acids (BCAA)**, **glucose**, and **lactate** — from published GWAS summary
+statistics through a standard post-GWAS causal-inference chain: cross-cohort meta-analysis,
+heritability and genetic correlation (LDSC), lead-variant definition, statistical fine-mapping,
+colocalization with gene expression, and Mendelian randomization against two cardiometabolic
+diseases. The analysis is **European-ancestry throughout** (EstBB + UKBB_EUR exposures,
+EUR-matched CAD/T2D outcomes, 1000G EUR LD reference), and **no individual-level genotype data
+is used** — every step operates on summary statistics plus a public LD reference.
 
-The two exposures are chosen as a **control–contrast pair**. **BCAA is the positive
-control**: a reproducible marker of insulin resistance that prospectively predicts type-2
-diabetes, with genetics anchored by the well-understood catabolic regulators *PPM1K* and
-*BCKDK*, so the full arc (GWAS → fine-mapped coding gene → colocalization → *cis*-MR →
-disease) is expected to close. **Lactate is the contrast**: different biology (glycolysis),
-a weaker causal prior, and a notable locus at *GP6* (platelet collagen receptor) that is
-biologically distant from a metabolic mechanism — a test of whether the methods correctly
-report a *less* compelling causal picture. Two exposures on different chromosomes and
-pathways demonstrate that the pipeline **discriminates**, rather than merely runs.
+The four exposures are chosen as a **gradient of causal-prior strength**, so the pipeline is
+shown to *discriminate* rather than merely run. **LDL_C is the canonical positive control**: the
+causal LDL→CAD relationship is proven by RCTs of statins (*HMGCR*), PCSK9 inhibitors (*PCSK9*),
+and ezetimibe (*NPC1L1*), so recovering a positive *cis*-MR at these drug-target genes is the
+strongest validation of the whole arc. **BCAA** (anchored by the catabolic regulators *PPM1K* /
+*BCKDK*) and **glucose** (anchored by *GCK* / *GCKR* / *G6PC2* / *SLC30A8*) are further positive
+controls for the diabetes axis, both tested against T2D. **Lactate is the contrast**: different
+biology (glycolysis), a weaker causal prior, and a notable locus at *GP6* (platelet collagen
+receptor) biologically distant from a metabolic-disease mechanism — a test of whether the methods
+correctly report a *less* compelling causal picture. Four exposures across four chromosomes and
+pathways demonstrate that the pipeline **discriminates** strong causal signals from weak ones.
 
 **Method choice stated up front — the LD reference is out-of-sample.** Fine-mapping,
 clumping, and MR instrument pruning use a 1000 Genomes EUR panel, **not** the in-sample UKBB
