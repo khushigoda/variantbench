@@ -1,0 +1,13 @@
+trait,cohort,study_tag,study_accession,reported_trait,cohorts,variant_count,ftp_path
+BCAA,EstBB,EST_Total_BCAA,GCST90449544,Total concentration of branched-chain amino acids (leucine + isoleucine + valine),EstBB,26173594,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90449001-GCST90450000/GCST90449544/GCST90449544.tsv.gz
+BCAA,UKBB_EUR,UKBB_EUR_Total_BCAA,GCST90449793,Total concentration of branched-chain amino acids (leucine + isoleucine + valine),UKBB,95729866,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90449001-GCST90450000/GCST90449793/GCST90449793.tsv.gz
+BCAA,meta_EUR,meta_EUR_Total_BCAA,GCST90451287,Total concentration of branched-chain amino acids (leucine + isoleucine + valine),UKBB|EstBB,103927004,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90451001-GCST90452000/GCST90451287/GCST90451287.tsv.gz
+Lactate,EstBB,EST_Lactate,GCST90449404,Lactate,EstBB,26173594,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90449001-GCST90450000/GCST90449404/GCST90449404.tsv.gz
+Lactate,UKBB_EUR,UKBB_EUR_Lactate,GCST90449653,Lactate,UKBB,95729866,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90449001-GCST90450000/GCST90449653/GCST90449653.tsv.gz
+Lactate,meta_EUR,meta_EUR_Lactate,GCST90451147,Lactate,UKBB|EstBB,103927004,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90451001-GCST90452000/GCST90451147/GCST90451147.tsv.gz
+LDL_C,EstBB,EST_LDL_C,GCST90449408,LDL cholesterol,EstBB,26173594,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90449001-GCST90450000/GCST90449408/GCST90449408.tsv.gz
+LDL_C,UKBB_EUR,UKBB_EUR_LDL_C,GCST90449657,LDL cholesterol,UKBB,95729866,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90449001-GCST90450000/GCST90449657/GCST90449657.tsv.gz
+LDL_C,meta_EUR,meta_EUR_LDL_C,GCST90451151,LDL cholesterol,UKBB|EstBB,103927004,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90451001-GCST90452000/GCST90451151/GCST90451151.tsv.gz
+Glucose,EstBB,EST_Glucose,GCST90449379,Glucose,EstBB,26173594,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90449001-GCST90450000/GCST90449379/GCST90449379.tsv.gz
+Glucose,UKBB_EUR,UKBB_EUR_Glucose,GCST90449628,Glucose,UKBB,95729866,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90449001-GCST90450000/GCST90449628/GCST90449628.tsv.gz
+Glucose,meta_EUR,meta_EUR_Glucose,GCST90451122,Glucose,UKBB|EstBB,103927004,https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics//GCST90451001-GCST90452000/GCST90451122/GCST90451122.tsv.gz

@@ -23,6 +23,15 @@ ftp_url () {  # $1 = accession -> full FTP file URL
 }
 
 # ---- 1. Metabolite exposure sumstats (Tambets et al., PMID 42162431) ----
+# EUR-only, 4 traits x 3 cohorts. Accessions from Supplementary Table S12
+# ("Download paths for GWAS summary statistics hosted at the GWAS Catalog").
+# Cohort scheme (EUR only): EstBB (WGS), UKBB_EUR, metaEUR (= EstBB+UKBB_EUR).
+# The 6 non-EUR UKBB ancestries (AFR/AMR/CSA/EAS/MID) and meta_full are NOT pulled.
+#   reported_trait in S12:
+#     BCAA    = "Total concentration of branched-chain amino acids (leucine + isoleucine + valine)"
+#     LDL_C   = "LDL cholesterol"   (NOT "Clinical LDL cholesterol", a separate trait)
+#     Lactate = "Lactate"
+#     Glucose = "Glucose"
 # name|accession
 METAB=(
   "BCAA_EstBB:GCST90449544"
@@ -31,6 +40,12 @@ METAB=(
   "Lactate_EstBB:GCST90449404"
   "Lactate_UKBB_EUR:GCST90449653"
   "Lactate_metaEUR:GCST90451147"
+  "LDL_C_EstBB:GCST90449408"
+  "LDL_C_UKBB_EUR:GCST90449657"
+  "LDL_C_metaEUR:GCST90451151"
+  "Glucose_EstBB:GCST90449379"
+  "Glucose_UKBB_EUR:GCST90449628"
+  "Glucose_metaEUR:GCST90451122"
 )
 for entry in "${METAB[@]}"; do
   name="${entry%%:*}"; acc="${entry##*:}"
@@ -49,7 +64,7 @@ done
 # We download the GWAS Catalog HARMONISED files, which are already lifted to GRCh38
 #   (genome_assembly: GRCh38 in their -meta.yaml). Metabolite exposures are GRCh38, so
 #   pulling harmonised CAD means NO self-liftover step is needed. This is also what the
-#   authors effectively did (their Aragam_2022_..._harmonized.parquet).
+#   authors effectively seem to have done from their code (their Aragam_2022_..._harmonized.parquet).
 #   Filename pattern: <acc>.h.tsv.gz  (gzipped, ~1.3 GB each)
 CAD_DIR="$base_ftp/GCST90132001-GCST90133000"
 for acc in GCST90132314 GCST90132315; do
