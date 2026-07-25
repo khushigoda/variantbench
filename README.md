@@ -1,8 +1,11 @@
 # VariantBench — metabolite GWAS follow-up pipeline
 
 Config-driven Snakemake + R pipeline reproducing a summary-statistics follow-up of
-Tambets et al. for two metabolites (total BCAA, lactate) against two disease outcomes
-(CAD, T2D). Exposures are published GWAS summary statistics — no individual-level data.
+Tambets et al. for four metabolic traits (LDL_C, total BCAA, glucose, lactate) against two
+disease outcomes (CAD, T2D). **European-ancestry throughout** (EstBB + UKBB_EUR exposures,
+EUR-matched outcomes, 1000G EUR LD). Exposures are published GWAS summary statistics — no
+individual-level data. The four traits form a causal-prior gradient — LDL_C, BCAA, and
+glucose as drug-target-validated positive controls, lactate as the weak-prior contrast.
 
 ## Layout
 ```
@@ -22,7 +25,7 @@ conda activate variantbench
 snakemake -n                       # dry run — see the whole DAG
 snakemake --dag | dot -Tsvg > dag.svg
 snakemake --cores 4 --use-conda    # build everything
-snakemake --cores 4 results/meta/BCAA.meta.tsv.gz   # one target
+snakemake --cores 4 results/meta/LDL_C.meta.tsv.gz  # one target (any of LDL_C/BCAA/Glucose/Lactate)
 ```
 
 ## Steps
