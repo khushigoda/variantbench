@@ -1,8 +1,10 @@
 #!/usr/bin/env Rscript
 # Step 0 — INSPECTION (standalone; NOT a Snakemake rule, produces no analysis data).
-# It reads only the HEADER + a small sample of rows from each raw metabolite file
+# It reads only the HEADER + a small sample of rows from each raw EstBB / UKBB_EUR file
 # (kilobytes, never a full-file load) to answer the three structural questions that
 # determine how 01 and 02 are written. Output is a short findings note we commit.
+# meta_EUR is NOT inspected — it is Step 1's validation target and is checked against
+# the paper's reported numbers, not combined, so its schema doesn't shape 01/02 code.
 #
 #   Run from the repo root:  Rscript workflow/scripts/00_inspect.R
 #
@@ -11,7 +13,7 @@
 # ANALYSIS.md / the Snakefile comment block.
 #
 # The three questions:
-#   Q1  Is the GWAS-SSF column schema identical across all 12 metabolite files?
+#   Q1  Is the GWAS-SSF column schema identical across all 8 files (4 traits x 2 cohorts)?
 #       -> if yes, 01/02 use one uniform column-selective read.
 #   Q2  What does `variant_id` hold — rsID (rs...) or positional (chr_pos_ref_alt)?
 #       -> LDSC munge merges to w_hm3.snplist BY rsID. Positional => 02 must attach
@@ -22,7 +24,9 @@ suppressMessages({library(data.table); library(yaml)})
 
 cfg     <- yaml::read_yaml("config/config.yaml")
 metabs  <- names(cfg$metabolites)
-cohorts <- c(cfg$cohorts, cfg$meta_name)          # EstBB, UKBB_EUR, meta_EUR
+cohorts <- cfg$cohorts                            # EstBB, UKBB_EUR only — the two cohorts
+                                                  # Step 1 combines. meta_EUR is a validation
+                                                  # target (checked vs the paper), not inspected.
 NSAMPLE <- 2000L                                  # rows sampled per file (never full read)
 dir.create("results/inspect", recursive = TRUE, showWarnings = FALSE)
 
@@ -74,7 +78,7 @@ md <- c(
   sprintf("_Generated %s. Sampled %d rows/file. No full-file reads; no analysis data written._",
           Sys.Date(), NSAMPLE),
   "",
-  sprintf("- **Files present:** %d / %d expected (4 traits x {EstBB, UKBB_EUR, meta_EUR}).",
+  sprintf("- **Files present:** %d / %d expected (4 traits x {EstBB, UKBB_EUR}).",
           nrow(present), nrow(rep)),
   sprintf("- **Q1 — schema uniform?** %s", q1),
   sprintf("- **Q2 — variant_id type:** %s  ->  %s", q2, q2_action),
