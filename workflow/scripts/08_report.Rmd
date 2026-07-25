@@ -45,19 +45,6 @@ show_figs <- function(paths) {
   paths <- paths[file.exists(paths) & file.info(paths)$size > 0]
   if (length(paths)) knitr::include_graphics(paths) else invisible(NULL)
 }
-
-# Parse "Total Observed scale h2: X (SE)" and "Intercept: X (SE)" from an LDSC .log.
-parse_h2_log <- function(path) {
-  txt <- tryCatch(readLines(path), error = function(e) character(0))
-  grab <- function(key) {
-    ln <- grep(key, txt, value = TRUE)
-    if (!length(ln)) return(c(NA_real_, NA_real_))
-    m <- regmatches(ln[1], regexec("([-0-9.]+)\\s*\\(([-0-9.]+)\\)", ln[1]))[[1]]
-    if (length(m) == 3) as.numeric(m[2:3]) else c(NA_real_, NA_real_)
-  }
-  h2 <- grab("Total Observed scale h2:"); it <- grab("Intercept:")
-  data.table(h2 = h2[1], h2_se = h2[2], intercept = it[1], intercept_se = it[2])
-}
 ```
 
 # Overview & method choices
@@ -104,23 +91,41 @@ exposures, so no CAD liftover is required; T2D (DIAGRAM, GRCh37) is lifted to GR
 
 # Meta-analysis (Step 1)
 
-*Inverse-variance fixed-effect meta-analysis of EstBB + UKBB (EUR). Validation: my meta
-effect sizes are regressed against the published meta-analysis — the slope/correlation
-should be ≈1 if the harmonization and weighting are correct.*
+*Inverse-variance fixed-effect meta-analysis of EstBB + UKBB (EUR), genome-wide (every union
+variant kept, not HapMap3-restricted). Validation: my meta effect sizes are regressed against
+the authors' published meta-analysis — the OLS slope and Pearson r should both be ≈1 if the
+allele harmonization and inverse-variance weighting are correct.*
 
-```{r meta-table}
-meta_files <- sm@input$meta
-meta_summary <- rbindlist(lapply(meta_files, function(p) {
-  d <- read_tsv1(p); if (is.null(d)) return(NULL)
-  data.table(metabolite = sub("\\.meta\\.tsv\\.gz$", "", basename(p)),
-             n_variants  = nrow(d),
-             n_gws       = if ("pval" %in% names(d)) sum(d$pval < 5e-8, na.rm = TRUE) else NA_integer_)
-}), fill = TRUE)
-show_table(meta_summary, "Meta-analysis summary per metabolite")
+```{r meta-validation}
+# Headline Step-1 result. Driven by the small precomputed `*.validation.tsv` (r, slope, variant
+# overlap) — NOT by loading the multi-GB genome-wide meta files, which would exhaust memory.
+val_tab <- read_many(sm@input$validation_tsv)
+if (!is.null(val_tab) && nrow(val_tab)) {
+  # tidy display: metabolite, comparison size, the two agreement metrics, cohort overlap
+  keep <- intersect(c("metab","pearson_r","slope","n_variants","n_compared",
+                      "n_both","n_estbb_only","n_ukbb_only"), names(val_tab))
+  val_show <- val_tab[, ..keep]
+  # keep full precision: the headline is that r/slope sit at machine precision to 1
+  # (e.g. 0.999999999999989), so display ~15 sig figs rather than rounding to a bare "1".
+  if ("pearson_r" %in% names(val_show)) val_show[, pearson_r := signif(pearson_r, 15)]
+  if ("slope"     %in% names(val_show)) val_show[, slope     := signif(slope, 15)]
+}
+show_table(if (exists("val_show")) val_show else NULL,
+           "Validation vs published meta_EUR: agreement (Pearson r, OLS slope) and cohort overlap")
 ```
 
+The validation table is the decisive check on the whole meta step: `pearson_r` and `slope` at
+machine precision to 1 mean the from-scratch inverse-variance meta reproduces the authors'
+published meta exactly, over all union variants. The overlap columns (`n_both`,
+`n_estbb_only`, `n_ukbb_only`) show that the meta genuinely combined both cohorts rather than
+defaulting to whichever one was present. *(Counting genome-wide-significant loci is deferred to
+Step 3, where LD-clumping collapses correlated hits into independent lead variants — a raw
+p < 5e-8 variant count over 100M+ variants over-counts single signals through LD.)*
+
 ```{r meta-fig}
-show_figs(sm@input$concordance)   # EstBB vs UKBB beta concordance (+ validation r)
+# validation.png (our beta vs published beta) is the headline; concordance.png (EstBB vs UKBB
+# per-cohort beta agreement) is the supporting cross-cohort view.
+show_figs(c(sm@input$validation, sm@input$concordance))
 ```
 
 # Heritability & genetic correlation (Step 2, LDSC)
@@ -130,9 +135,9 @@ is the key diagnostic: an intercept ≈1 means test-statistic inflation reflects
 signal, not population stratification or cryptic relatedness.*
 
 ```{r ldsc-table}
-h2_tab <- rbindlist(lapply(sm@input$h2, function(p) {
-  cbind(metabolite = sub("\\.h2\\.log$", "", basename(p)), parse_h2_log(p))
-}), fill = TRUE)
+# Read the PRECOMPUTED tables written by 02_ldsc_rg.R (single source of truth) rather than
+# re-parsing the raw LDSC logs here — one parser, no drift between this report and Step 2.
+h2_tab <- read_tsv1(sm@input$h2_tsv)
 show_table(h2_tab, "LDSC SNP-heritability and intercept")
 rg_tab <- read_tsv1(sm@input$rg)
 show_table(rg_tab, "Genetic correlation (rg) between metabolites")

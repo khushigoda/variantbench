@@ -269,8 +269,11 @@ rule ldsc_rg:
 # rule report:
 #     input:
 #         meta=expand("results/meta/{metab}.meta.tsv.gz", metab=METABOLITES),
+#         validation_tsv=expand("results/meta/{metab}.validation.tsv", metab=METABOLITES),
+#         validation=expand("results/meta/{metab}.validation.png", metab=METABOLITES),
 #         concordance=expand("results/meta/{metab}.concordance.png", metab=METABOLITES),
 #         h2=expand("results/ldsc/{metab}.h2.log", metab=METABOLITES),
+#         h2_tsv="results/ldsc/h2.tsv",
 #         rg="results/ldsc/rg.tsv",
 #         rg_plot="results/ldsc/rg_heatmap.png",
 #         h2_plot="results/ldsc/h2_barplot.png",
