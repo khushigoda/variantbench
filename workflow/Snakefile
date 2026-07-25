@@ -44,6 +44,7 @@ def meta_inputs(wildcards):
         "est":  metab_raw_file(m, "EstBB"),
         "ukbb": metab_raw_file(m, "UKBB_EUR"),
         "val":  metab_raw_file(m, config["meta_name"]),   # published meta_EUR
+        "hm3":  config["ref"]["hm3_snplist"],             # HapMap3 snplist: variants restricted to this set (8 GB memory fix)
     }
 
 # =========================================================

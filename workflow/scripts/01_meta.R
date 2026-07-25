@@ -30,36 +30,51 @@ SEL <- c("chromosome", "base_pair_location", "effect_allele", "other_allele",
 # (LDSC + this analysis are autosomal EUR anyway).
 JKEY <- c("chr", "pos", "ea", "oa")
 
-read_cohort <- function(f, tag, keep_rsid = FALSE) {
+# MEMORY STRATEGY (8 GB box): filter EACH cohort to the ~1.2M HapMap3 rsIDs
+# IMMEDIATELY after reading, BEFORE the join. Two full 26M-row tables do not fit
+# in 8 GB (they swap-thrash), but Step 2 (LDSC munge) discards every non-HM3
+# variant anyway, so carrying the full genome through the merge is pure waste
+# here. Post-filter each table is ~1.2M rows, so the whole join/IVW/validation
+# runs in-memory with headroom. Meta betas for the kept variants are IDENTICAL
+# to a full-genome run (IVW of a variant is independent of other variants).
+# NOTE: fine-mapping (Step 3), if run, reads the RAW files per-locus (dense,
+# tiny regions) — it does not consume this genome-wide (HM3-restricted) meta.
+hm3 <- fread(snakemake@input$hm3, select = "SNP", showProgress = FALSE)$SNP
+message(sprintf("  HapMap3 reference: %d rsIDs (variants restricted to this set)",
+                length(hm3)))
+
+read_cohort <- function(f, tag, keep_eaf = FALSE) {
   message(sprintf("  [%s] reading %s ...", tag, basename(f)))
   d <- fread(f, select = SEL, showProgress = FALSE)
   setnames(d,
     c("chromosome", "base_pair_location", "effect_allele", "other_allele",
       "standard_error", "effect_allele_frequency"),
     c("chr", "pos", "ea", "oa", "se", "eaf"))
+  d <- d[rsid %chin% hm3]                 # HM3 restriction FIRST -> 26M -> ~1.2M
+  message(sprintf("  [%s] %d HapMap3 variants (of file total)", tag, nrow(d)))
   d[, chr := toupper(sub("^chr", "", as.character(chr)))]
   d[chr == "X", chr := "23"]
   d[, chr := suppressWarnings(as.integer(chr))]
   d <- d[is.finite(beta) & is.finite(se) & se > 0 & !is.na(chr)]
   d <- unique(d, by = JKEY)
-  # keep only what the downstream steps need, per cohort (drop early to save memory)
-  if (keep_rsid) d <- d[, .(chr, pos, ea, oa, eaf, beta, se, n, rsid)]  # est: +eaf +rsid
-  else           d <- d[, .(chr, pos, ea, oa, beta, se, n)]             # ukbb: minimal
+  # rsid kept in BOTH cohorts (needed to label cohort-specific rows for munge);
+  # eaf only needed from est (carried onto the meta output).
+  if (keep_eaf) d <- d[, .(chr, pos, ea, oa, eaf, beta, se, n, rsid)]
+  else          d <- d[, .(chr, pos, ea, oa, beta, se, n, rsid)]
   message(sprintf("  [%s] %d variants after QC", tag, nrow(d)))
   d
 }
 
-est  <- read_cohort(snakemake@input$est,  "EstBB",   keep_rsid = TRUE)
+est  <- read_cohort(snakemake@input$est,  "EstBB",    keep_eaf = TRUE)
 ukbb <- read_cohort(snakemake@input$ukbb, "UKBB_EUR")
 
 # ---- no-flip full (outer) join on (chr,pos,ea,oa) ----
+# rsid carried from both sides; coalesced to SNP below (both are HM3 rsIDs).
 m <- merge(
-  est[,  .(chr, pos, ea, oa, eaf, beta_e = beta, se_e = se, n_e = n)],
-  ukbb[, .(chr, pos, ea, oa, beta_u = beta, se_u = se, n_u = n)],
+  est[,  .(chr, pos, ea, oa, eaf, beta_e = beta, se_e = se, n_e = n, rsid_e = rsid)],
+  ukbb[, .(chr, pos, ea, oa, beta_u = beta, se_u = se, n_u = n, rsid_u = rsid)],
   by = JKEY, all = TRUE)
-rm(ukbb); invisible(gc())                     # ukbb done after the merge
-est <- est[, .(chr, pos, ea, oa, rsid)]        # slim est to just the rsID lookup
-invisible(gc())
+rm(est, ukbb); invisible(gc())                # both cohorts done after the merge
 message(sprintf("  merged: %d union variants", nrow(m)))
 
 # per-cohort inverse-variance weights; absent cohort -> weight 0 (variant kept, single-cohort)
@@ -93,16 +108,13 @@ diag <- data.table(
   n_ukbb_only  = nrow(m[w_u > 0 & w_e == 0]))
 both <- m[n_cohorts == 2, .(beta_e, beta_u)]
 
-out <- m[, .(chr, pos, ea, oa, eaf, beta, se, z, pval, neg_log10p, n,
+# SNP = HapMap3 rsID, coalesced from whichever cohort(s) carry the variant.
+# Every row is HM3-restricted, so rsid_e/rsid_u is always present for at least one
+# cohort; both agree where both exist. LDSC munge merges to w_hm3.snplist BY rsID.
+m[, SNP := fifelse(!is.na(rsid_e), rsid_e, rsid_u)]
+out <- m[, .(SNP, chr, pos, ea, oa, eaf, beta, se, z, pval, neg_log10p, n,
              direction, het_q, het_p, n_cohorts)]
 rm(m); invisible(gc())                          # m no longer needed
-# SNP = native rsID from the raw files (col `rsid`, ~98.7% rs#####) where the variant
-# exists in EstBB, else a positional id as fallback (built only for the ~1.3% unmatched).
-# LDSC munge merges to w_hm3.snplist BY rsID, so carrying rsid here lets Step 2 match HapMap3.
-out[, SNP := NA_character_]
-out[est, SNP := i.rsid, on = JKEY]
-rm(est); invisible(gc())
-out[is.na(SNP), SNP := paste(chr, pos, ea, oa, sep = ":")]
 setcolorder(out, c("SNP", "chr", "pos", "ea", "oa", "eaf", "beta", "se", "z",
                    "pval", "neg_log10p", "n", "direction", "het_q", "het_p", "n_cohorts"))
 setorder(out, chr, pos)
