@@ -42,8 +42,15 @@ variant set per trait, so only the effect sizes differ. Outputs per trait in
 
 ## Run
 
-Per-step conda envs are activated by Snakemake itself via `--use-conda` (R steps →
-`variantbench-r`; LDSC → `ldsc`), so no manual `conda activate` is needed. Run from the repo root.
+Three conda envs, nested: you activate only the **driver** env (`variantbench`, which holds
+`snakemake`); Snakemake then dispatches each rule into its own env. R steps run in
+`variantbench-r` (activated by `--use-conda`); the LDSC binary runs in `ldsc` (Python-2.7),
+reached by explicit `conda run -n ldsc` inside the Step-2 rules. So the only `conda activate`
+you type is the driver; `--use-conda` handles the rest. Run from the repo root.
+
+```bash
+conda activate variantbench           # the driver env — the one with snakemake
+```
 
 ```bash
 snakemake -n                          # dry run — see the whole DAG
