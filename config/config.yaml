@@ -10,33 +10,33 @@ metabolites:
     accession:
       EstBB:    GCST90449544
       UKBB_EUR: GCST90449793
-      meta_EUR: GCST90451287        # published meta — used to VALIDATE our Step 1
+      metaEUR: GCST90451287        # published meta — used to VALIDATE our Step 1
     #cis_genes: [BCKDK, DBT, PPM1K]   # for Step 7 cis-MR (drug-target)
     #coloc_locus: {chr: 16, gene: BCKDK}
   Lactate:
     accession:
       EstBB:    GCST90449404
       UKBB_EUR: GCST90449653
-      meta_EUR: GCST90451147
+      metaEUR: GCST90451147
     #cis_genes: [GP6]
     #coloc_locus: {chr: 19, gene: GP6}
   LDL_C:                             # "LDL cholesterol" in S12 (NOT "Clinical LDL cholesterol")
     accession:
       EstBB:    GCST90449408
       UKBB_EUR: GCST90449657
-      meta_EUR: GCST90451151
+      metaEUR: GCST90451151
     #cis_genes: [PCSK9, HMGCR, NPC1L1, LDLR]  # canonical LDL drug targets for Step 7 cis-MR
     #coloc_locus: {chr: 1, gene: SORT1}       # 1p13.3 — textbook LDL GWAS-eQTL coloc locus
   Glucose:
     accession:
       EstBB:    GCST90449379
       UKBB_EUR: GCST90449628
-      meta_EUR: GCST90451122
+      metaEUR: GCST90451122
     #cis_genes: [GCK, GCKR, G6PC2, SLC30A8]   # glycemic effector/drug-target genes for Step 7
     #coloc_locus: {chr: 2, gene: GCKR}        # strong glucose locus, liver-expressed (eQTL available)
 
 cohorts:   [EstBB, UKBB_EUR]   # meta-analysis inputs (Step 1) — EUR ONLY
-meta_name: meta_EUR            # validation target accession key
+meta_name: metaEUR            # validation target accession key
 
 # ---- Outcomes (MR, Steps 6-7) ----
 outcomes:
