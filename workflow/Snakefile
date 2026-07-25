@@ -121,20 +121,34 @@ rule ldsc_munge:
     # z,0 avoids reconstructing p at ultra-significant loci (underflow-safe), consistent
     # with how 01 derives -log10 p in log-space. The SNP column holds the native rsID
     # (01_meta.R coalesces rsid_e/rsid_u; only variants missing an rsID in BOTH cohorts
-    # get a positional id, and those simply don't match w_hm3.snplist and are dropped by
-    # --merge-alleles — which is the desired HapMap3 restriction). No rsID-attach needed.
-    # munge reads gzip (incl. our concatenated per-chr gzip) natively, so no zcat.
+    # get a positional id, and those simply don't match w_hm3.snplist and are dropped).
+    #
+    # PRE-RESTRICTION (scripts/ldsc_prep_hm3.sh): munging the full genome-wide meta
+    # directly fails two ways, so we hand munge a slim HapMap3-only input instead:
+    #   1. eaf is NA for ~76% of variants (UKBB-only rows carry no allele frequency), and
+    #      munge does dropna(how="any") across EVERY column it reads — so those variants
+    #      would be discarded before the HapMap3 merge, a large needless power loss. LDSC
+    #      h2/rg never use allele frequency, so we drop eaf.
+    #   2. munge runs on Python-2.7 / old pandas, which infers the integer n column as
+    #      object dtype and rejects it ("Columns ['N'] are expected to be numeric"), even
+    #      though n is clean integers across all 103M rows. Emitting n as a float makes the
+    #      old issubdtype(...,number) check pass unambiguously.
+    # The prep step also collapses 103M gzip-chunked rows to one ~1.2M-row uncompressed
+    # file, so munge reads it in a single pass. --merge-alleles is KEPT for allele
+    # harmonisation/QC (flip-align to HM3 ref, drop ambiguous), which pre-filtering doesn't do.
     input:  "results/meta/{metabolite}.meta.tsv.gz"
     output: "results/ldsc/{metabolite}.sumstats.gz"
     params: hm3=config["ref"]["hm3_snplist"], ldsc_env=config["envs"]["ldsc"]
     shell:
         r"""
         mkdir -p results/ldsc
+        slim=results/ldsc/{wildcards.metabolite}.hm3.tsv
+        bash scripts/ldsc_prep_hm3.sh {input} {params.hm3} $slim
         conda run -n {params.ldsc_env} python ~/ldsc/munge_sumstats.py \
-            --sumstats {input} --merge-alleles {params.hm3} \
+            --sumstats $slim --merge-alleles {params.hm3} \
             --out results/ldsc/{wildcards.metabolite} \
-            --snp SNP --a1 ea --a2 oa --N-col n --signed-sumstats z,0 \
-            --chunksize 2500000
+            --snp SNP --a1 ea --a2 oa --N-col n --signed-sumstats z,0
+        rm -f $slim
         """
 
 rule ldsc_h2:
