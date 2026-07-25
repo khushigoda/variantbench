@@ -48,6 +48,11 @@ read_chr <- function(dir, chr_tok, chr_int) {
   ren <- c(chromosome = "chr", base_pair_location = "pos", effect_allele = "ea",
            other_allele = "oa", standard_error = "se", effect_allele_frequency = "eaf")
   setnames(d, names(ren), unname(ren), skip_absent = TRUE)
+  # fread infers an all-NA column's type as LOGICAL. On chrX one cohort's rsid can be
+  # entirely empty -> logical, which then breaks the character rsid coalesce. Force it
+  # (and the allele cols, same failure mode) to the type the rest of the script expects.
+  if ("rsid" %in% names(d)) d[, rsid := as.character(rsid)]
+  d[, `:=`(ea = as.character(ea), oa = as.character(oa))]
   d <- d[is.finite(beta) & is.finite(se) & se > 0]
   d[, chr := chr_int]                       # integer chr for this file
   d <- unique(d, by = c("pos", "ea", "oa"))
@@ -106,7 +111,10 @@ for (ci in seq_along(toks)) {
   m[, het_p := fifelse(is.finite(het_q), pchisq(het_q, df = 1, lower.tail = FALSE), NA_real_)]
   m[, direction := paste0(fifelse(w_e > 0, fifelse(b_e >= 0, "+", "-"), "?"),
                           fifelse(w_u > 0, fifelse(b_u >= 0, "+", "-"), "?"))]
-  m[, SNP := fifelse(!is.na(rsid_e), rsid_e, rsid_u)]   # coalesced native rsID
+  # coalesced native rsID (both cols forced to character in read_chr, so types match)
+  m[, SNP := fcoalesce(as.character(rsid_e), as.character(rsid_u))]
+  # both cohorts missing an rsID (e.g. some chrX variants) -> positional id, never NA
+  m[is.na(SNP) | SNP == "", SNP := paste(chr, pos, ea, oa, sep = ":")]
 
   # running counts + concordance sample (both-cohort betas)
   tot["n_total"] <- tot["n_total"] + nrow(m)
