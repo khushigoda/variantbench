@@ -62,18 +62,18 @@ for entry in "${METAB[@]}"; do
 done
 
 # ---- 2. Disease OUTCOME sumstats for MR ----
-# CAD — Aragam et al. 2022. Pull BOTH accessions:
-#   GCST90132314 = European-only (181,522 cases)  -> ancestry-matched to EUR instruments
-#   GCST90132315 = multi-ancestry (210,842 cases) -> the accession the paper's Methods cite
-#   (The authors' released code actually used .314; paper Methods cite .315. We grab both
-#    and justify the final choice in the writeup.)
-# We download the GWAS Catalog HARMONISED files, which are already lifted to GRCh38
-#   (genome_assembly: GRCh38 in their -meta.yaml). Metabolite exposures are GRCh38, so
+# CAD — Aragam et al. 2022. EUR-only:
+#   GCST90132314 = European-only (181,522 cases)  -> ancestry-matched to EUR instruments,
+#                  and what the authors' released code actually used.
+#   (GCST90132315, the multi-ancestry accession the paper's Methods cite, is NOT downloaded
+#    — EUR-only is ancestry-matched to our EUR instruments and is the primary/only outcome.)
+# We download the GWAS Catalog HARMONISED file, which is already lifted to GRCh38
+#   (genome_assembly: GRCh38 in the -meta.yaml). Metabolite exposures are GRCh38, so
 #   pulling harmonised CAD means NO self-liftover step is needed. This is also what the
-#   authors effectively seem to have done from their code (their Aragam_2022_..._harmonized.parquet).
-#   Filename pattern: <acc>.h.tsv.gz  (gzipped, ~1.3 GB each)
+#   authors effectively did from their code (their Aragam_2022_..._harmonized.parquet).
+#   Filename pattern: <acc>.h.tsv.gz  (gzipped, ~1.3 GB)
 CAD_DIR="$base_ftp/GCST90132001-GCST90133000"
-for acc in GCST90132314 GCST90132315; do
+for acc in GCST90132314; do
   if [[ -s "$RAW/CAD.${acc}.h.tsv.gz" ]]; then
     echo ">> CAD $acc: already present, skipping"
     continue
@@ -84,10 +84,10 @@ for acc in GCST90132314 GCST90132315; do
 done
 
 # T2D — Suzuki et al. 2024 (DIAMANTE / T2DGGI). MANUAL download (agreement required),
-# NOT scriptable via curl. Both ancestry sets from the DIAGRAM downloads page:
+# NOT scriptable via curl. EUR-only, from the DIAGRAM downloads page:
 #   https://www.diagram-consortium.org/downloads.html
 #   - EUR_Metal_LDSC-CORR_Neff.v2.txt  (European-only)   -> primary (ancestry-matched)
-#   - All_Metal_LDSC-CORR_Neff.v2.txt  (multi-ancestry)  -> sensitivity check
+#   (All_Metal_LDSC-CORR_Neff.v2.txt, multi-ancestry, is NOT downloaded — EUR-only only.)
 # BUILD NOTE: DIAGRAM serves these ONLY in GRCh37/hg19 (confirmed in their
 #   T2DGGI_GWAS_summary_statistics.pdf: "chromosome and position (hg19, build 37)").
 #   There is NO pre-harmonised GRCh38 download for T2D (unlike CAD on the GWAS Catalog).
@@ -98,11 +98,9 @@ done
 #
 # After downloading, place + rename + compress (run from repo root):
 #   mv ~/Downloads/EUR_Metal_LDSC-CORR_Neff.v2.txt $RAW/T2D.Suzuki2024.EUR.tsv
-#   mv ~/Downloads/All_Metal_LDSC-CORR_Neff.v2.txt $RAW/T2D.Suzuki2024.All.tsv
 #   gzip $RAW/T2D.Suzuki2024.EUR.tsv   # -> T2D.Suzuki2024.EUR.tsv.gz
-#   gzip $RAW/T2D.Suzuki2024.All.tsv   # -> T2D.Suzuki2024.All.tsv.gz
-echo ">> T2D: place manually-downloaded DIAGRAM files (GRCh37):"
-echo "        $RAW/T2D.Suzuki2024.EUR.tsv.gz (primary), $RAW/T2D.Suzuki2024.All.tsv.gz (sensitivity)"
+echo ">> T2D: place manually-downloaded DIAGRAM file (GRCh37):"
+echo "        $RAW/T2D.Suzuki2024.EUR.tsv.gz (EUR-only, primary)"
 
 # ---- 3. LDSC reference data (Step 2) ----
 if [[ ! -f "$REF/w_hm3.snplist.gz" ]]; then

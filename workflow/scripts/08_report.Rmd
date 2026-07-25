@@ -95,11 +95,12 @@ LD the reference paper used. Out-of-sample LD can miscalibrate SuSiE credible se
 mis-prune instruments; this is an accepted tractability tradeoff, flagged here and again in
 each affected section. A second deliberate choice concerns the CAD outcome: the paper's
 Methods cite the multi-ancestry `GCST90132315`, but the authors' released code uses the
-European-only `GCST90132314`. I follow the code's choice as my **primary** outcome — it keeps
-exposure and outcome ancestry-matched and avoids a known source of two-sample MR bias — and
-retain the multi-ancestry study as a **sensitivity check**. Both CAD files are the GWAS
-Catalog harmonised (GRCh38) releases, matching the GRCh38 metabolite exposures, so no CAD
-liftover is required; T2D (DIAGRAM, GRCh37) is lifted to GRCh38 in Step 0.
+European-only `GCST90132314`. I use the European-only accession — it keeps exposure and
+outcome ancestry-matched and avoids a known source of two-sample MR bias, and it is the
+choice the authors' own code made. (The multi-ancestry study is not used: with EUR-only
+exposures it would reintroduce the ancestry mismatch this design is built to avoid.) The
+CAD file is the GWAS Catalog harmonised (GRCh38) release, matching the GRCh38 metabolite
+exposures, so no CAD liftover is required; T2D (DIAGRAM, GRCh37) is lifted to GRCh38 in Step 0.
 
 # Meta-analysis (Step 1)
 
