@@ -20,6 +20,26 @@
 #          rsIDs before munge; rsID => munge merges directly.
 #   Q3  Is chromosome coding consistent (numeric vs 'chr' prefix; X vs 23)?
 #       -> so 01's join keys (chr:pos:ea:oa) align across cohorts.
+# --- environment guard: fail early and clearly if run outside the R env / repo root ---
+.need <- c("data.table", "yaml")
+.miss <- .need[!vapply(.need, requireNamespace, logical(1), quietly = TRUE)]
+if (length(.miss)) {
+  stop(sprintf(paste0(
+    "Missing R package(s): %s\n",
+    "  This script needs the pipeline's R environment. Run it as:\n",
+    "    conda run -n variantbench-r Rscript workflow/scripts/00_inspect.R\n",
+    "  (or: conda activate variantbench-r  &&  Rscript workflow/scripts/00_inspect.R)\n",
+    "  If the package is genuinely absent from that env:\n",
+    "    conda install -n variantbench-r -c conda-forge r-data.table r-yaml"),
+    paste(.miss, collapse = ", ")), call. = FALSE)
+}
+if (!file.exists("config/config.yaml")) {
+  stop(paste0(
+    "config/config.yaml not found in the working directory (", getwd(), ").\n",
+    "  Run from the REPO ROOT (~/variantbench), not from workflow/scripts/:\n",
+    "    cd ~/variantbench && conda run -n variantbench-r Rscript workflow/scripts/00_inspect.R"),
+    call. = FALSE)
+}
 suppressMessages({library(data.table); library(yaml)})
 
 cfg     <- yaml::read_yaml("config/config.yaml")
@@ -64,14 +84,18 @@ fwrite(rep, "results/inspect/schema_report.tsv", sep = "\t")
 # ---- aggregate the three findings ----
 present <- rep[exists == TRUE]
 schemas <- unique(present$header)
-q1 <- if (nrow(present) == 0) "no files present yet — re-run once downloads finish"
-      else if (length(schemas) == 1) "IDENTICAL across all present files"
-      else sprintf("DIFFERS: %d distinct header layouts (see schema_report.tsv)", length(schemas))
+q1 <- {
+  if (nrow(present) == 0) "no files present yet — re-run once downloads finish"
+  else if (length(schemas) == 1) "IDENTICAL across all present files"
+  else sprintf("DIFFERS: %d distinct header layouts (see schema_report.tsv)", length(schemas))
+}
 q2 <- paste(unique(na.omit(present$id_type)), collapse = ", ")
 q3 <- paste(unique(na.omit(present$chr_example)), collapse = ", ")
-q2_action <- if (grepl("positional", q2)) "02 MUST attach rsIDs before LDSC munge"
-             else if (identical(q2, "rsID")) "SNP col is rsID; munge merges directly"
-             else "unknown — re-check once files land"
+q2_action <- {
+  if (grepl("positional", q2)) "02 MUST attach rsIDs before LDSC munge"
+  else if (identical(q2, "rsID")) "SNP col is rsID; munge merges directly"
+  else "unknown — re-check once files land"
+}
 
 md <- c(
   "# Step 0 — schema inspection findings",
