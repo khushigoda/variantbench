@@ -38,7 +38,11 @@ variant set per trait, so only the effect sizes differ. Outputs per trait in
 `results/meta/{trait}.{meta.tsv.gz, validation.tsv, validation.png, concordance.png}`.
 
 **Step 2 (LDSC h²/rg)** scripts are prepared and unit-tested; run once the preflight passes
-(see below). All four metas now exist, so Step 2 is unblocked.
+(see below). All four metas now exist, so Step 2 is unblocked. munge is fed a HapMap3-restricted
+slim input (`scripts/ldsc_prep_hm3.sh`) rather than the raw genome-wide meta — this drops the
+`eaf` column (NA on ~76% of variants, which munge's `dropna(how="any")` would otherwise discard
+before the HM3 merge) and writes `n` as a float (the LDSC env's Python-2.7 pandas rejects the
+integer column as non-numeric).
 
 ## Run
 
