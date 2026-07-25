@@ -21,21 +21,24 @@ report/report.html        final self-contained report
 
 ## Status (current submission)
 
-**Step 1 — meta-analysis: validated.** The from-scratch fixed-effect IVW meta reproduces the
-authors' published `meta_EUR` essentially exactly. On **BCAA** (first trait run end-to-end,
-genome-wide, all 103,927,003 union variants):
+**Step 1 — meta-analysis: validated for all four traits.** The from-scratch fixed-effect IVW
+meta reproduces the authors' published `meta_EUR` at machine precision, genome-wide (all
+103,927,003 union variants per trait — every variant kept, not HapMap3-restricted):
 
-| metric | value |
-|---|---|
-| Pearson r (our β vs published β) | **0.999999999999989** (≈1.0000) |
-| OLS slope | **0.999999999987551** (≈1.0000) |
-| variants compared to published | 103,927,003 |
-| in both cohorts / EstBB-only / UKBB-only | 17,976,457 / 8,197,137 / 77,753,409 |
+| trait | Pearson r (our β vs published β) | OLS slope |
+|---|---|---|
+| BCAA    | 0.999999999999989 | 0.999999999987551 |
+| Lactate | 0.999999999999991 | 1.00000000001978 |
+| LDL_C   | 0.999999999999986 | 1.00000000002351 |
+| Glucose | 1.000000000000000 | 1.00000000000254 |
 
-Outputs in `results/meta/BCAA.{meta.tsv.gz, validation.tsv, validation.png, concordance.png}`.
-The remaining three traits (Lactate, LDL_C, Glucose) run with the identical rule and are being
-produced by the per-trait loop below. **Step 2 (LDSC h²/rg)** scripts are prepared and unit-tested;
-they run once the four metas exist.
+Every trait draws on the same 103,927,003-variant union (17,976,457 in both cohorts;
+8,197,137 EstBB-only; 77,753,409 UKBB-only) — EstBB and UKBB_EUR release the same imputed
+variant set per trait, so only the effect sizes differ. Outputs per trait in
+`results/meta/{trait}.{meta.tsv.gz, validation.tsv, validation.png, concordance.png}`.
+
+**Step 2 (LDSC h²/rg)** scripts are prepared and unit-tested; run once the preflight passes
+(see below). All four metas now exist, so Step 2 is unblocked.
 
 ## Run
 
