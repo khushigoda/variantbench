@@ -13,6 +13,31 @@ REF=data/ref
 mkdir -p "$RAW" "$REF"
 base_ftp="https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics"
 
+# ---- completeness checks ----------------------------------------------------
+# The old guard was `[[ -s FILE ]]` (non-empty). That treats a truncated/interrupted
+# download as "present" and skips it forever. These helpers verify a file is a COMPLETE
+# download before we skip it; anything that fails is re-fetched (curl -C - resumes).
+#
+# gzip_ok: the whole gzip stream decompresses cleanly (catches truncation at the byte
+#   level — a half-written .gz fails here). Cheap: decompresses to /dev/null, no temp file.
+gzip_ok () { [[ -s "$1" ]] && gzip -t "$1" 2>/dev/null; }
+
+# md5_ok: if a sidecar <base>.meta.yaml carries a data_file_md5sum, verify against it.
+#   Returns success (0) when there is NO checksum to check, so it never blocks on absence.
+md5_ok () {  # $1 = data file, $2 = meta.yaml (optional)
+  local f="$1" meta="${2:-}"
+  [[ -f "$meta" ]] || return 0
+  local want; want=$(grep -Eo 'data_file_md5sum:[[:space:]]*[0-9a-fA-F]{32}' "$meta" \
+                     | grep -Eo '[0-9a-fA-F]{32}' | head -1)
+  [[ -n "$want" ]] || return 0
+  local got; got=$( (md5sum "$f" 2>/dev/null || md5 -q "$f") | awk '{print $1}')
+  [[ "$got" == "$want" ]]
+}
+
+# complete_gz: skip-if-true guard for a gzipped data file (+ optional meta for md5).
+complete_gz () { gzip_ok "$1" && md5_ok "$1" "${2:-}"; }
+# -----------------------------------------------------------------------------
+
 ftp_url () {  # $1 = accession -> full FTP file URL
   local acc="$1"
   local n=${acc:4}
@@ -49,16 +74,21 @@ METAB=(
 )
 for entry in "${METAB[@]}"; do
   name="${entry%%:*}"; acc="${entry##*:}"
-  if [[ -s "$RAW/${name}.${acc}.tsv.gz" ]]; then
-    echo ">> $name ($acc): already present, skipping"
+  gz="$RAW/${name}.${acc}.tsv.gz"; meta="$RAW/${name}.${acc}.meta.yaml"
+  # fetch metadata first so md5 verification is possible on this run
+  if [[ ! -f "$meta" ]]; then
+    curl -L --fail -o "$meta" "$(ftp_url "$acc")-meta.yaml" \
+      || echo "WARNING: metadata unavailable for $acc" >&2
+  fi
+  if complete_gz "$gz" "$meta"; then
+    echo ">> $name ($acc): already present & complete, skipping"
     continue
   fi
+  [[ -s "$gz" ]] && echo ">> $name ($acc): incomplete/failed check — re-fetching (resume)"
   url=$(ftp_url "$acc")
   echo ">> $name  ($acc)"
-  curl -L --fail -C - -o "$RAW/${name}.${acc}.tsv.gz"        "$url"
-  if ! curl -L --fail -o "$RAW/${name}.${acc}.meta.yaml" "${url}-meta.yaml"; then
-  echo "WARNING: metadata unavailable for $acc" >&2
-  fi
+  curl -L --fail -C - -o "$gz" "$url"
+  complete_gz "$gz" "$meta" || { echo "ERROR: $name ($acc) still fails completeness check" >&2; exit 1; }
 done
 
 # ---- 2. Disease OUTCOME sumstats for MR ----
@@ -74,13 +104,16 @@ done
 #   Filename pattern: <acc>.h.tsv.gz  (gzipped, ~1.3 GB)
 CAD_DIR="$base_ftp/GCST90132001-GCST90133000"
 for acc in GCST90132314; do
-  if [[ -s "$RAW/CAD.${acc}.h.tsv.gz" ]]; then
-    echo ">> CAD $acc: already present, skipping"
+  gz="$RAW/CAD.${acc}.h.tsv.gz"
+  if gzip_ok "$gz"; then
+    echo ">> CAD $acc: already present & complete, skipping"
     continue
   fi
+  [[ -s "$gz" ]] && echo ">> CAD $acc: incomplete — re-fetching (resume)"
   echo ">> CAD $acc (harmonised GRCh38)"
-  curl -L --fail -C - -o "$RAW/CAD.${acc}.h.tsv.gz" \
+  curl -L --fail -C - -o "$gz" \
      "$CAD_DIR/$acc/harmonised/${acc}.h.tsv.gz"
+  gzip_ok "$gz" || { echo "ERROR: CAD $acc still fails gzip check" >&2; exit 1; }
 done
 
 # T2D — Suzuki et al. 2024 (DIAMANTE / T2DGGI). MANUAL download (agreement required),
@@ -101,20 +134,46 @@ done
 #   gzip $RAW/T2D.Suzuki2024.EUR.tsv   # -> T2D.Suzuki2024.EUR.tsv.gz
 echo ">> T2D: place manually-downloaded DIAGRAM file (GRCh37):"
 echo "        $RAW/T2D.Suzuki2024.EUR.tsv.gz (EUR-only, primary)"
+# manual file — verify its gzip integrity if present, warn (don't fail) if absent
+if [[ -e "$RAW/T2D.Suzuki2024.EUR.tsv.gz" ]]; then
+  gzip_ok "$RAW/T2D.Suzuki2024.EUR.tsv.gz" \
+    && echo "   T2D EUR file: present & gzip-complete" \
+    || echo "   WARNING: T2D EUR file present but FAILS gzip check — re-download manually" >&2
+else
+  echo "   (T2D EUR file not yet placed — manual step)"
+fi
 
 # ---- 3. LDSC reference data (Step 2) ----
-if [[ ! -f "$REF/w_hm3.snplist.gz" ]]; then
-  curl -L --fail -o "$REF/w_hm3.snplist.gz" \
+# HapMap3 SNP list (for munge --merge-alleles) and EUR LD scores (for --ref-ld/--w-ld).
+# Both guards verify a COMPLETE download (gzip stream valid), then materialize the
+# uncompressed forms the config points at: data/ref/w_hm3.snplist (file) and
+# data/ref/eur_w_ld_chr/ (DIRECTORY — the tar must be extracted, not just downloaded).
+if ! gzip_ok "$REF/w_hm3.snplist.gz"; then
+  [[ -s "$REF/w_hm3.snplist.gz" ]] && echo ">> w_hm3.snplist.gz: incomplete — re-fetching (resume)"
+  curl -L --fail -C - -o "$REF/w_hm3.snplist.gz" \
     "https://zenodo.org/records/7773502/files/w_hm3.snplist.gz?download=1"
+  gzip_ok "$REF/w_hm3.snplist.gz" || { echo "ERROR: w_hm3.snplist.gz fails gzip check" >&2; exit 1; }
 fi
 
-if [[ ! -f "$REF/eur_w_ld_chr.tar.gz" ]]; then
-  curl -L --fail -o "$REF/eur_w_ld_chr.tar.gz" \
+if ! gzip_ok "$REF/eur_w_ld_chr.tar.gz"; then
+  [[ -s "$REF/eur_w_ld_chr.tar.gz" ]] && echo ">> eur_w_ld_chr.tar.gz: incomplete — re-fetching (resume)"
+  curl -L --fail -C - -o "$REF/eur_w_ld_chr.tar.gz" \
     "https://zenodo.org/records/8182036/files/eur_w_ld_chr.tar.gz?download=1"
+  gzip_ok "$REF/eur_w_ld_chr.tar.gz" || { echo "ERROR: eur_w_ld_chr.tar.gz fails gzip check" >&2; exit 1; }
 fi
 
-if [[ ! -f "$REF/w_hm3.snplist" ]]; then
+# uncompressed HapMap3 list (config: hm3_snplist)
+if [[ ! -s "$REF/w_hm3.snplist" ]]; then
   gunzip -k "$REF/w_hm3.snplist.gz"
+fi
+
+# extracted LD-score directory (config: ld_scores = data/ref/eur_w_ld_chr/).
+# LDSC needs the 22 per-chr .l2.ldscore.gz + .M_5_50 files, so extract if the dir is
+# missing or looks incomplete (<22 ldscore files).
+if [[ ! -d "$REF/eur_w_ld_chr" ]] || \
+   [[ $(find "$REF/eur_w_ld_chr" -name '*.l2.ldscore.gz' 2>/dev/null | wc -l) -lt 22 ]]; then
+  echo ">> extracting eur_w_ld_chr.tar.gz"
+  tar -xzf "$REF/eur_w_ld_chr.tar.gz" -C "$REF"
 fi
 
 # ---- 4. Molecular QTLs for colocalization (Step 5) ----
