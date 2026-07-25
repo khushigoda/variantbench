@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # VariantBench — data acquisition
 # All accessions/paths below were verified live against the GWAS Catalog REST API
-# and EBI FTP (2026-07). Metabolites chosen: Total BCAA + Lactate.
+# and EBI FTP (2026-07). Metabolites chosen: Total BCAA + Lactate + glucose + LDL_C.
 # Cohort decoding (from GWAS Catalog sample sizes):
 #   EstBB    = 185,352 EUR
 #   UKBB_EUR = 413,897 EUR
@@ -18,21 +18,21 @@ ftp_url () {  # $1 = accession -> full FTP file URL
   local n=${acc:4}
   local lo=$(( ((10#$n - 1)/1000)*1000 + 1 ))
   local hi=$(( lo + 999 ))
-  printf "https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST%08d-GCST%08d/%s/%s.tsv.gz" \
-         "$lo" "$hi" "$acc" "$acc"
+  printf "%s/GCST%08d-GCST%08d/%s/%s.tsv.gz" \
+         "$base_ftp" "$lo" "$hi" "$acc" "$acc"
 }
 
 # ---- 1. Metabolite exposure sumstats (Tambets et al., PMID 42162431) ----
 # EUR-only, 4 traits x 3 cohorts. Accessions from Supplementary Table S12
 # ("Download paths for GWAS summary statistics hosted at the GWAS Catalog").
-# Cohort scheme (EUR only): EstBB (WGS), UKBB_EUR, metaEUR (= EstBB+UKBB_EUR).
-# The 6 non-EUR UKBB ancestries (AFR/AMR/CSA/EAS/MID) and meta_full are NOT pulled.
+# Cohort scheme (EUR only): EstBB, UKBB_EUR, metaEUR (= EstBB+UKBB_EUR).
+# The non-EUR UKBB ancestries and meta_full are NOT pulled.
 #   reported_trait in S12:
 #     BCAA    = "Total concentration of branched-chain amino acids (leucine + isoleucine + valine)"
 #     LDL_C   = "LDL cholesterol"   (NOT "Clinical LDL cholesterol", a separate trait)
 #     Lactate = "Lactate"
 #     Glucose = "Glucose"
-# name|accession
+# name:accession
 METAB=(
   "BCAA_EstBB:GCST90449544"
   "BCAA_UKBB_EUR:GCST90449793"
@@ -49,10 +49,16 @@ METAB=(
 )
 for entry in "${METAB[@]}"; do
   name="${entry%%:*}"; acc="${entry##*:}"
+  if [[ -s "$RAW/${name}.${acc}.tsv.gz" ]]; then
+    echo ">> $name ($acc): already present, skipping"
+    continue
+  fi
   url=$(ftp_url "$acc")
   echo ">> $name  ($acc)"
   curl -L --fail -C - -o "$RAW/${name}.${acc}.tsv.gz"        "$url"
-  curl -L --fail      -o "$RAW/${name}.${acc}.meta.yaml"     "${url}-meta.yaml" || true
+  if ! curl -L --fail -o "$RAW/${name}.${acc}.meta.yaml" "${url}-meta.yaml"; then
+  echo "WARNING: metadata unavailable for $acc" >&2
+  fi
 done
 
 # ---- 2. Disease OUTCOME sumstats for MR ----
@@ -68,6 +74,10 @@ done
 #   Filename pattern: <acc>.h.tsv.gz  (gzipped, ~1.3 GB each)
 CAD_DIR="$base_ftp/GCST90132001-GCST90133000"
 for acc in GCST90132314 GCST90132315; do
+  if [[ -s "$RAW/CAD.${acc}.h.tsv.gz" ]]; then
+    echo ">> CAD $acc: already present, skipping"
+    continue
+  fi
   echo ">> CAD $acc (harmonised GRCh38)"
   curl -L --fail -C - -o "$RAW/CAD.${acc}.h.tsv.gz" \
      "$CAD_DIR/$acc/harmonised/${acc}.h.tsv.gz"
@@ -95,14 +105,19 @@ echo ">> T2D: place manually-downloaded DIAGRAM files (GRCh37):"
 echo "        $RAW/T2D.Suzuki2024.EUR.tsv.gz (primary), $RAW/T2D.Suzuki2024.All.tsv.gz (sensitivity)"
 
 # ---- 3. LDSC reference data (Step 2) ----
-echo ">> HapMap3 snplist"
-curl -L --fail -o "$REF/w_hm3.snplist.gz" \
-  "https://zenodo.org/records/7773502/files/w_hm3.snplist.gz?download=1"
-echo ">> 1000G EUR LD scores"
-curl -L --fail -o "$REF/eur_w_ld_chr.tar.gz" \
-  "https://zenodo.org/records/8182036/files/eur_w_ld_chr.tar.gz?download=1"
-tar -xzf "$REF/eur_w_ld_chr.tar.gz" -C "$REF"
-gunzip -k "$REF/w_hm3.snplist.gz"
+if [[ ! -f "$REF/w_hm3.snplist.gz" ]]; then
+  curl -L --fail -o "$REF/w_hm3.snplist.gz" \
+    "https://zenodo.org/records/7773502/files/w_hm3.snplist.gz?download=1"
+fi
+
+if [[ ! -f "$REF/eur_w_ld_chr.tar.gz" ]]; then
+  curl -L --fail -o "$REF/eur_w_ld_chr.tar.gz" \
+    "https://zenodo.org/records/8182036/files/eur_w_ld_chr.tar.gz?download=1"
+fi
+
+if [[ ! -f "$REF/w_hm3.snplist" ]]; then
+  gunzip -k "$REF/w_hm3.snplist.gz"
+fi
 
 # ---- 4. Molecular QTLs for colocalization (Step 5) ----
 # eQTL Catalogue (fine-mapped SuSiE credible sets / LBFs) for the coloc locus.
