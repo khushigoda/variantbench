@@ -93,7 +93,11 @@ rule split_by_chr:
     raw file ONCE instead of re-decompressing it per chromosome in the meta loop.
     Output is a directory of chrN.tsv.gz (+ a .done marker)."""
     input:  lambda w: raw_by_tag(w.metabolite, w.tag)
-    output: directory("results/split/{metabolite}_{tag}")
+    # temp(): the per-chr split dir is a transient intermediate — read once by
+    # meta_analysis, then auto-deleted by Snakemake as soon as that job finishes.
+    # Keeps disk flat (~one trait's splits at a time) with no manual rm; on a meta
+    # FAILURE Snakemake keeps the splits so a re-run skips re-splitting.
+    output: temp(directory("results/split/{metabolite}_{tag}"))
     params: cols=lambda w: SPLIT_COLS[w.tag]
     wildcard_constraints: tag="EstBB|UKBB_EUR|metaEUR"
     shell:  "bash scripts/00_split_by_chr.sh {input} {output} {params.cols}"
@@ -115,18 +119,22 @@ rule meta_analysis:
 rule ldsc_munge:
     # meta table carries a SIGNED z (sign = effect direction). Feeding signed-sumstats
     # z,0 avoids reconstructing p at ultra-significant loci (underflow-safe), consistent
-    # with how 01 derives -log10 p in log-space. SNP col holds the raw variant_id; if 00
-    # found that to be positional rather than rsID, add an rsID-attach step BEFORE munge
-    # (LDSC merges to w_hm3.snplist by rsID).
+    # with how 01 derives -log10 p in log-space. The SNP column holds the native rsID
+    # (01_meta.R coalesces rsid_e/rsid_u; only variants missing an rsID in BOTH cohorts
+    # get a positional id, and those simply don't match w_hm3.snplist and are dropped by
+    # --merge-alleles — which is the desired HapMap3 restriction). No rsID-attach needed.
+    # munge reads gzip (incl. our concatenated per-chr gzip) natively, so no zcat.
     input:  "results/meta/{metabolite}.meta.tsv.gz"
     output: "results/ldsc/{metabolite}.sumstats.gz"
     params: hm3=config["ref"]["hm3_snplist"], ldsc_env=config["envs"]["ldsc"]
     shell:
         r"""
+        mkdir -p results/ldsc
         conda run -n {params.ldsc_env} python ~/ldsc/munge_sumstats.py \
-            --sumstats <(zcat {input}) --merge-alleles {params.hm3} \
+            --sumstats {input} --merge-alleles {params.hm3} \
             --out results/ldsc/{wildcards.metabolite} \
-            --snp SNP --a1 ea --a2 oa --N-col n --signed-sumstats z,0
+            --snp SNP --a1 ea --a2 oa --N-col n --signed-sumstats z,0 \
+            --chunksize 2500000
         """
 
 rule ldsc_h2:
@@ -135,6 +143,7 @@ rule ldsc_h2:
     params: ld=config["ref"]["ld_scores"], ldsc_env=config["envs"]["ldsc"]
     shell:
         r"""
+        mkdir -p results/ldsc
         conda run -n {params.ldsc_env} python ~/ldsc/ldsc.py \
             --h2 {input} --ref-ld-chr {params.ld} --w-ld-chr {params.ld} \
             --out results/ldsc/{wildcards.metabolite}.h2

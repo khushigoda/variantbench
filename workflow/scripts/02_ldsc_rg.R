@@ -18,44 +18,66 @@ ldsc_env <- snakemake@params$ldsc_env
 metabs   <- sub("\\.sumstats\\.gz$", "", basename(sumstats))
 dir.create("results/ldsc", showWarnings = FALSE, recursive = TRUE)
 
-# ---- 1. run --rg (all traits against each other in one call) ----
+# ---- 1. run --rg for ALL trait pairs (staircase) ----
+# LDSC's `--rg f1,f2,...,fk` computes rg of the FIRST file against each of the rest
+# (f1-vs-f2, f1-vs-f3, ...), NOT all pairwise combinations. To cover every C(n,2) pair
+# exactly once, lead each trait i over the tail (i+1..n): run i gives rg(i, j) for j>i.
+# n-1 short LDSC calls; their logs are concatenated and parsed together below.
 rg_prefix <- "results/ldsc/rg"
-system2("conda", c("run", "-n", ldsc_env, "python", path.expand("~/ldsc/ldsc.py"),
-                   "--rg", paste(sumstats, collapse = ","),
-                   "--ref-ld-chr", ld, "--w-ld-chr", ld,
-                   "--out", rg_prefix))
+rg_logs   <- character(0)
+n <- length(sumstats)
+for (i in seq_len(n - 1L)) {
+  out_i <- sprintf("%s_%s", rg_prefix, metabs[i])
+  system2("conda", c("run", "-n", ldsc_env, "python", path.expand("~/ldsc/ldsc.py"),
+                     "--rg", paste(sumstats[i:n], collapse = ","),
+                     "--ref-ld-chr", ld, "--w-ld-chr", ld,
+                     "--out", out_i))
+  rg_logs <- c(rg_logs, paste0(out_i, ".log"))
+}
 
 # ---- 2. parse h2 from each *.h2.log: "Total Observed scale h2: X (SE)" ----
 parse_h2 <- function(f) {
+  if (!file.exists(f)) return(data.table(metab = sub("\\.h2\\.log$", "", basename(f)),
+                                          h2 = NA_real_, h2_se = NA_real_, intercept = NA_real_))
   L <- readLines(f, warn = FALSE)
   hit <- grep("Total Observed scale h2:", L, value = TRUE)
   int <- grep("Intercept:", L, value = TRUE)
   num <- function(s) as.numeric(regmatches(s, regexpr("-?[0-9.]+", s)))
   h2 <- se <- icpt <- NA_real_
   if (length(hit)) {
-    mm <- regmatches(hit[1], regexec("h2:\\s*(-?[0-9.]+)\\s*\\(([0-9.]+)\\)", hit[1]))[[1]]
+    mm <- regmatches(hit[1], regexec("h2:\\s*(-?[0-9.eE+-]+)\\s*\\(([0-9.eE+-]+)\\)", hit[1]))[[1]]
     if (length(mm) == 3) { h2 <- as.numeric(mm[2]); se <- as.numeric(mm[3]) }
   }
-  if (length(icpt)) icpt <- num(icpt[1])
+  if (length(int)) icpt <- num(int[1])
   data.table(metab = sub("\\.h2\\.log$", "", basename(f)), h2 = h2, h2_se = se, intercept = icpt)
 }
 h2tab <- rbindlist(lapply(h2logs, parse_h2), fill = TRUE)
 fwrite(h2tab, snakemake@output$h2, sep = "\t")
 
-# ---- 3. parse rg table from rg.log ("Summary of Genetic Correlation Results") ----
+# ---- 3. parse the rg summary block from each rg log, then combine ----
+# The block is whitespace-ALIGNED (variable-width columns), so read.table (splits on any
+# run of whitespace) parses it robustly where fread (single-delimiter) would mis-split.
 parse_rg <- function(f) {
+  if (!file.exists(f)) return(data.table())
   L <- readLines(f, warn = FALSE)
   i <- grep("Summary of Genetic Correlation Results", L)
   if (!length(i)) return(data.table())
-  tail <- L[(i + 1):length(L)]
-  tail <- tail[cumsum(tail == "") == 0 | seq_along(tail) == 1]   # up to first blank
-  tail <- tail[grepl("[^[:space:]]", tail)]
-  dt <- tryCatch(fread(text = paste(tail, collapse = "\n")), error = function(e) data.table())
-  if (nrow(dt)) { dt[, p1 := basename(sub("\\.sumstats\\.gz$", "", p1))]
-                  dt[, p2 := basename(sub("\\.sumstats\\.gz$", "", p2))] }
+  blk <- L[(i + 1):length(L)]
+  stop_at <- which(!grepl("[^[:space:]]", blk))     # first fully-blank line ends the table
+  if (length(stop_at)) blk <- blk[seq_len(stop_at[1] - 1L)]
+  blk <- blk[grepl("[^[:space:]]", blk)]
+  if (length(blk) < 2) return(data.table())          # header + >=1 row required
+  dt <- tryCatch(as.data.table(read.table(text = paste(blk, collapse = "\n"),
+                                           header = TRUE, stringsAsFactors = FALSE)),
+                 error = function(e) data.table())
   dt
 }
-rgtab <- parse_rg(paste0(rg_prefix, ".log"))
+rgtab <- rbindlist(lapply(rg_logs, parse_rg), fill = TRUE)
+if (nrow(rgtab)) {
+  rgtab[, p1 := sub("\\.sumstats\\.gz$", "", basename(p1))]
+  rgtab[, p2 := sub("\\.sumstats\\.gz$", "", basename(p2))]
+  rgtab <- unique(rgtab, by = c("p1", "p2"))         # de-dup any overlap across logs
+}
 fwrite(rgtab, snakemake@output$rg, sep = "\t")
 
 # ---- 4. figures ----
@@ -64,7 +86,8 @@ h2tab[, metab := factor(metab, levels = metabs)]
 ph2 <- ggplot(h2tab, aes(metab, h2)) +
   geom_col(fill = "steelblue") +
   geom_errorbar(aes(ymin = h2 - h2_se, ymax = h2 + h2_se), width = .2) +
-  theme_bw() + labs(x = NULL, y = expression(SNP-h^2), title = "SNP heritability (LDSC)")
+  theme_bw() + labs(x = NULL, y = expression(paste("SNP ", italic(h)^2)),
+                    title = "SNP heritability (LDSC)")
 ggsave(snakemake@output$h2_plot, ph2, width = 5, height = 4, dpi = 120)
 
 # rg heatmap (symmetric; diagonal = 1)
