@@ -37,12 +37,42 @@ Every trait draws on the same 103,927,003-variant union (17,976,457 in both coho
 variant set per trait, so only the effect sizes differ. Outputs per trait in
 `results/meta/{trait}.{meta.tsv.gz, validation.tsv, validation.png, concordance.png}`.
 
-**Step 2 (LDSC h²/rg)** scripts are prepared and unit-tested; run once the preflight passes
-(see below). All four metas now exist, so Step 2 is unblocked. munge is fed a HapMap3-restricted
-slim input (`scripts/ldsc_prep_hm3.sh`) rather than the raw genome-wide meta — this drops the
-`eaf` column (NA on ~76% of variants, which munge's `dropna(how="any")` would otherwise discard
-before the HM3 merge) and writes `n` as a float (the LDSC env's Python-2.7 pandas rejects the
-integer column as non-numeric).
+**Step 2 (LDSC h²/rg)** replicates the paper's two genetic-correlation analyses over **three
+datasets × four traits**: the two raw per-cohort GWAS (`EstBB`, `UKBB_EUR`) and our own Step-1
+meta (`meta_EUR`, which carries native rsID). It produces:
+
+- **Analysis A — rg between biobanks, per trait:** for each trait, correlate the 3 datasets
+  → C(3,2)=3 × 4 = **12 rg** (`rg_between_biobanks.tsv`).
+- **Analysis B — rg between traits, per dataset:** within each dataset, correlate the 4 traits
+  → C(4,2)=6 × 3 = **18 rg** (`rg_between_traits.tsv`).
+- **SNP-h²** for all 12 (trait, dataset) pairs (`h2.tsv`), plus three figures.
+
+**QC is munge's own**, matching the authors (who pass no filter flags). `--merge-alleles
+w_hm3.snplist` does the HapMap3 restriction + allele harmonisation; munge's defaults
+`--maf-min 0.01` and `--info-min 0.9` fire automatically from the `FRQ`/`INFO` columns. INFO≥0.9
+therefore applies to the two raw cohorts (which carry `info`); `meta_EUR` has no INFO column, so
+it gets HM3+MAF only — exactly how INFO was handled for the published meta (a per-cohort upstream
+QC, never a single meta-stage filter). A thin adapter (`scripts/ldsc_munge_input.sh`, **no
+MAF/INFO filtering**) is the only pre-step: it converts `neg_log10(P)` → real P (1e-300 floor),
+writes `n` as a float (the LDSC env's Python-2.7 pandas rejects an integer N column), renames
+columns to canonical `SNP/A1/A2/BETA/P/N/FRQ/INFO`, **and pre-restricts to the ~1.2M HapMap3
+rsIDs** via a streaming `awk` join against `w_hm3.snplist`. That last step is a performance
+fix, not a science change: munge's Py2.7 pandas would otherwise parse all 26–104M genome-wide
+rows before `--merge-alleles` discards the ~99% non-HapMap3 ones.
+
+Two Step-2 parameters keep the run tractable on an 8 GB laptop. Neither changes the result —
+`--merge-alleles` still performs all allele harmonisation inside munge and the FRQ/INFO QC
+defaults still fire:
+1. **HapMap3 pre-restriction (adapter):** bounds the file munge parses to the ~1.2M HM3 rsIDs,
+   so munge never materialises the 26–104M genome-wide rows only to discard 99% of them.
+2. **`--chunksize 200000` on the munge call:** munge's default chunksize (`5e6`) exceeds the
+   ~1.2M-row HM3 file, which forces the `--merge-alleles` membership test to run once over the
+   whole file. Under LDSC's pinned pandas 0.20.3 that single large-vs-large string comparison is
+   super-linear; processing the file in 200k-row chunks makes the same comparison run in small
+   batches (`7 × isin(200k) ≪ 1 × isin(1.2M)`), reducing each munge job to ~20 s. A chunksize
+   above 1.2M has no effect (still one chunk) — 200k is the load-bearing value.
+
+Signed statistic = `BETA` (matches the authors).
 
 ## Run
 
@@ -67,9 +97,19 @@ for T in BCAA Lactate LDL_C Glucose; do
   snakemake --use-conda --cores 1 results/meta/${T}.meta.tsv.gz || break
 done
 
-# --- Step 2 (LDSC h2 + rg) once all four metas exist ---
-snakemake --use-conda --cores 1 results/ldsc/rg.tsv results/ldsc/h2.tsv \
-          results/ldsc/rg_heatmap.png results/ldsc/h2_barplot.png
+# --- Step 2 (LDSC h2 + both rg analyses) once all four metas exist ---
+# 12 munge jobs (3 datasets x 4 traits) + --h2 + the two rg staircases. The adapter pre-restricts
+# each genome-wide input (26M-104M variants) to the ~1.2M HapMap3 rsIDs before munge, and the rule
+# passes --chunksize 200000 so munge's pinned-pandas allele-merge runs in small batches. Together:
+# ~20s/munge job, a few hundred MB RAM, and --merge-alleles + FRQ/INFO QC unchanged inside munge.
+# --rerun-triggers mtime: trust the existing frozen metas (skip re-running Step 1); it MUST go
+# LAST because it consumes multiple values and would otherwise swallow the target paths.
+snakemake --use-conda --cores 6 \
+          results/ldsc/h2.tsv \
+          results/ldsc/rg_between_biobanks.tsv results/ldsc/rg_between_traits.tsv \
+          results/ldsc/h2_barplot.png \
+          results/ldsc/rg_between_biobanks.png results/ldsc/rg_between_traits.png \
+          --rerun-triggers mtime
 
 # Or the whole thing (Steps 0-2) via the default target — but on a memory/disk-constrained
 # box prefer the per-trait loop above so splits don't pile up across traits:

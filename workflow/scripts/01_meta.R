@@ -52,6 +52,7 @@ read_chr <- function(dir, chr_tok, chr_int) {
   # entirely empty -> logical, which then breaks the character rsid coalesce. Force it
   # (and the allele cols, same failure mode) to the type the rest of the script expects.
   if ("rsid" %in% names(d)) d[, rsid := as.character(rsid)]
+  if ("eaf"  %in% names(d)) d[, eaf  := as.numeric(eaf)]   # guard: all-NA chr -> logical via fread
   d[, `:=`(ea = as.character(ea), oa = as.character(oa))]
   d <- d[is.finite(beta) & is.finite(se) & se > 0]
   d[, chr := chr_int]                       # integer chr for this file
@@ -89,8 +90,8 @@ for (ci in seq_along(toks)) {
 
   # no-flip outer join on (chr,pos,ea,oa); rsid carried from both sides
   m <- merge(
-    est[,  .(chr, pos, ea, oa, eaf, beta_e = beta, se_e = se, n_e = n, rsid_e = rsid)],
-    ukbb[, .(chr, pos, ea, oa, beta_u = beta, se_u = se, n_u = n, rsid_u = rsid)],
+    est[,  .(chr, pos, ea, oa, eaf_e = eaf, beta_e = beta, se_e = se, n_e = n, rsid_e = rsid)],
+    ukbb[, .(chr, pos, ea, oa, eaf_u = eaf, beta_u = beta, se_u = se, n_u = n, rsid_u = rsid)],
     by = JKEY, all = TRUE)
   rm(est, ukbb)
 
@@ -104,6 +105,20 @@ for (ci in seq_along(toks)) {
            se   = sqrt(1 / w_sum),
            n    = fifelse(is.na(n_e), 0, as.numeric(n_e)) + fifelse(is.na(n_u), 0, as.numeric(n_u)),
            n_cohorts = (w_e > 0) + (w_u > 0))]
+  # Combine effect-allele frequency across cohorts. The join is no-flip on (chr,pos,ea,oa),
+  # so eaf_e and eaf_u are on the SAME effect allele and pool directly (like beta). Two-cohort
+  # variants get the N-weighted mean; single-cohort variants keep their one cohort's eaf via
+  # fcoalesce fall-through; a variant absent from both is genuinely NA. This populates eaf for
+  # UKBB-only variants (previously NA because only EstBB's eaf was carried), which the Step-3
+  # dual MAF threshold and Step-4 fine-mapping require.
+  m[, eaf := {
+       ne_ <- fifelse(is.na(n_e), 0, as.numeric(n_e))
+       nu_ <- fifelse(is.na(n_u), 0, as.numeric(n_u))
+       fcoalesce(
+         fifelse(is.finite(eaf_e) & is.finite(eaf_u) & (ne_ + nu_) > 0,
+                 (ne_ * eaf_e + nu_ * eaf_u) / (ne_ + nu_), NA_real_),
+         eaf_e, eaf_u)
+     }]
   m[, z := beta / se]                                   # SIGNED z (sign = direction)
   m[, pval       := 2 * pnorm(-abs(z))]
   m[, neg_log10p := -(pnorm(-abs(z), log.p = TRUE) + log(2)) / log(10)]

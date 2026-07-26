@@ -130,28 +130,45 @@ show_figs(c(sm@input$validation, sm@input$concordance))
 
 # Heritability & genetic correlation (Step 2, LDSC)
 
-*SNP-heritability per metabolite and genetic correlation between them. The **LDSC intercept**
-is the key diagnostic: an intercept ≈1 means test-statistic inflation reflects polygenic
-signal, not population stratification or cryptic relatedness.*
+*SNP-heritability per (trait, dataset) and the paper's two genetic-correlation analyses —
+**A**: rg between the three datasets (EstBB, UKBB_EUR, meta_EUR) for each trait; **B**: rg
+between the four traits within each dataset. The **LDSC intercept** is the key diagnostic:
+an intercept ≈1 means test-statistic inflation reflects polygenic signal, not population
+stratification or cryptic relatedness.*
 
 ```{r ldsc-table}
 # Read the PRECOMPUTED tables written by 02_ldsc_rg.R (single source of truth) rather than
 # re-parsing the raw LDSC logs here — one parser, no drift between this report and Step 2.
 h2_tab <- read_tsv1(sm@input$h2_tsv)
-show_table(h2_tab, "LDSC SNP-heritability and intercept")
-rg_tab <- read_tsv1(sm@input$rg)
-show_table(rg_tab, "Genetic correlation (rg) between metabolites")
+show_table(h2_tab, "LDSC SNP-heritability and intercept (per trait x dataset)")
+rg_bb <- read_tsv1(sm@input$rg_bb)
+show_table(rg_bb, "Analysis A — genetic correlation between biobanks, per trait")
+rg_tr <- read_tsv1(sm@input$rg_tr)
+show_table(rg_tr, "Analysis B — genetic correlation between traits, per dataset")
 ```
 
 ```{r ldsc-fig}
-show_figs(c(sm@input$h2_plot, sm@input$rg_plot))
+show_figs(c(sm@input$h2_plot, sm@input$rg_bb_plot, sm@input$rg_tr_plot))
 ```
 
 # Lead variants (Step 3)
 
-*Genome-wide-significant loci (p < 5e-8), LD-clumped (r² < 0.05, 2 Mb window) to independent
-lead variants. Clumping — not fixed intervals — because many neighbouring significant SNPs
-tag a single causal signal through LD.*
+*Genome-wide-significant loci reduced to independent lead variants. Two design choices define
+this step:*
+
+*1. **Frequency-dependent significance.** Common/low-frequency variants (MAF > 0.1%) use the
+standard genome-wide line P < 5e-8; rare variants (MAF < 0.1%) use a stricter Bonferroni line
+P < 0.05/8e7 = 6.25e-10, because the ~80M rare tests make 5e-8 anti-conservative. Variants whose
+effect-allele frequency is unknown fall back to the standard line and are flagged `maf_class =
+"unknown"` so the reader can weight them accordingly.*
+
+*2. **Distance-based locus definition.** The most-significant unclaimed variant is taken as a
+lead, a 2 Mb locus (±1 Mb) is claimed around it, all variants inside are removed, and the process
+iterates. The brief's Step 3 is summary-statistics-only and provides no genotype panel, so pairwise
+r² is not computable; the distance rule is the standard, honest substitute. The paper's additional
+r²≥0.05 locus-merge (which stops an ultra-strong signal from "bleeding" past the 2 Mb window) and
+r²≥0.8 cross-trait clustering require a EUR genotype panel and are deferred to the LD-aware
+follow-on (Step 4 sourcing).*
 
 ```{r loci-table}
 lead_tab <- read_many(sm@input$lead)
@@ -278,16 +295,36 @@ indicates:
 *Answer: **B.** The LDSC intercept isolates confounding/inflation from polygenicity; an intercept
 near 1 means the elevated χ² comes from real polygenic signal, validating the h² estimate.*
 
-**Q3 — Lead variants.** Independent loci are defined by LD clumping (r² threshold) rather than by
-taking the top SNP in fixed genomic windows because:
+**Q3 — Lead variants.** Step 3 calls lead variants with a frequency-dependent threshold: P < 5e-8
+for common variants (MAF > 0.1%) but the stricter P < 6.25e-10 for rare variants. The rare-variant
+threshold is tightened because:
 
-- A. Clumping is computationally faster.
-- B. Many significant SNPs in a region tag one causal signal via LD; clumping collapses them to independent signals.
-- C. Fixed windows cannot span multiple chromosomes.
-- D. Clumping removes the need for a reference panel.
+- A. Rare variants have larger effect sizes, so they need a higher bar.
+- B. There are far more rare-variant tests (~80M), so the standard 5e-8 line is anti-conservative and would admit too many false positives.
+- C. Rare variants are always artifacts and should be suppressed.
+- D. LDSC requires it for the heritability estimate.
 
-*Answer: **B.** LD makes neighbouring hits statistically redundant; clumping (which uses an LD
-panel) yields genuinely independent lead variants instead of over-counting one signal.*
+*Answer: **B.** The genome-wide 5e-8 threshold is calibrated to ~1M independent common-variant
+tests. Adding ~80M rare-variant tests inflates the multiple-testing burden, so a Bonferroni-style
+tightening (0.05/8e7) is needed to hold the family-wise error rate. Note the practical corollary in
+this replication: because ~76% of meta variants had unknown frequency until the eaf provenance fix,
+the dual threshold could only be applied once frequency coverage was restored — otherwise every
+variant defaults to the lenient common line.*
+
+**Q3b — Locus definition.** This replication defines independent loci by distance (top SNP, then a
+±1 Mb exclusion window, iterated) rather than by the paper's LD-based r²≥0.05 merge. The main
+scientific limitation of the distance-only rule is:
+
+- A. It cannot handle more than one chromosome.
+- B. A single very strong signal (−log₁₀P ≫ 100) can generate association that extends beyond 2 Mb through LD, so distance clumping may split one true signal into several "independent" loci.
+- C. It systematically undercounts loci relative to LD clumping.
+- D. It requires an in-sample LD matrix to run.
+
+*Answer: **B.** LD can carry a strong association past a fixed window; the paper's r²≥0.05 merge
+exists specifically to stop that "bleeding" and collapse the fragments into one locus. Distance
+clumping has no way to know two windows tag the same causal variant, so it can over-count. It is the
+honest choice only when no matched genotype panel is available to compute pairwise r² — which is the
+case here.*
 
 **Q4 — Fine-mapping.** The pipeline fine-maps with an out-of-sample 1000G EUR LD reference. The
 primary risk to the credible sets is:
