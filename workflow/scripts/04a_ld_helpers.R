@@ -107,8 +107,16 @@ if (cmd == "select") {
 } else if (cmd == "harmonize") {
   pvar_f<-a[1]; gwas_f<-a[2]; stem<-a[3]; gene<-a[4]; chr<-a[5]
   lead_pos<-as.numeric(a[6]); W<-as.numeric(a[7]); EDGE<-as.numeric(a[8]); manifest<-a[9]
-  pv <- read.table(pvar_f, sep="\t", stringsAsFactors=FALSE, comment.char="")
+  # plink2 .pvar carries an optional VCF-style metadata block (##fileformat, ##INFO, ##contig,
+  # ...) before the single #CHROM column-header line. Drop the ## lines, then read from #CHROM
+  # (without this, read.table treats the tab-less ## lines as data and collapses to 1 column).
+  pv_lines <- readLines(pvar_f)
+  pv_lines <- pv_lines[!grepl("^##", pv_lines)]          # keep #CHROM header + variant rows
+  pv <- read.table(text = pv_lines, sep = "\t", stringsAsFactors = FALSE,
+                   header = FALSE, comment.char = "")
   names(pv)[1:5] <- c("CHROM","POS","ID","REF","ALT")   # pvar: #CHROM POS ID REF ALT (+maybe more)
+  pv <- pv[pv$CHROM != "#CHROM", , drop = FALSE]         # the #CHROM header line becomes a data row; drop it
+  pv$POS <- as.numeric(pv$POS)                           # header=FALSE read leaves POS as character; POS is used in arithmetic
   gw <- read.delim(gwas_f, stringsAsFactors=FALSE)
   n_panel <- nrow(pv); n_gwas <- nrow(gw)
   key <- function(chr,pos) paste(chr,pos,sep=":")
