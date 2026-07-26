@@ -35,7 +35,8 @@
 #
 # RUN    : this script is normally driven by the Snakemake rule `make_ld` (trait = wildcard,
 #          all knobs = config). It also runs standalone via env vars (defaults in [brackets]):
-#            conda activate variantbench   (provides plink2, bcftools, awk, Rscript)
+#            conda activate variantbench   (provides bcftools, awk, Rscript)
+#            plink2 comes from its own Rosetta/x86 env: PLINK2="conda run -n plink2 plink2"
 #            TRAIT=LDL_C bash workflow/scripts/04b_make_ld.sh          # curated CAD loci [default]
 #            TRAIT=LDL_C CURATE=0 bash .../04b_make_ld.sh              # every eligible lead
 #            TRAIT=LDL_C LOCI=PCSK9 bash .../04b_make_ld.sh            # single-locus sample test
@@ -69,6 +70,9 @@ ANCHORS="${ANCHORS:-config/cad_effector_anchors.tsv}"   # gene<TAB>chr<TAB>ancho
 # Rscript by default — confirmed on PATH in every env; override to the R env's if preferred).
 RSCRIPT="${RSCRIPT:-Rscript}"
 RHELP="${RHELP:-workflow/scripts/04a_ld_helpers.R}"
+# plink2 lives in its own Rosetta/x86 conda env on arm64 Macs (no osx-arm64 bioconda build).
+# Default: reach it via `conda run -n plink2 plink2`; override PLINK2 if it's on PATH elsewhere.
+PLINK2="${PLINK2:-conda run -n plink2 plink2}"
 [[ -f "$RHELP" ]] || { echo "[STOP] R helper '$RHELP' not found." >&2; exit 5; }
 
 # The 1000G phase3-GRCh38 panel (chr{N}_hg38 --pfile trios (.pgen + .pvar.zst + .psam)) is provisioned
@@ -122,7 +126,7 @@ tail -n +2 "$LOCI_TSV" | while IFS=$'\t' read -r gene chr lead_snp lead_pos ea o
 
   # 4. extract locus from per-chr panel, EUR-only: biallelic SNPs, MAF>0.1%, region-clipped
   #    vzs: pvar is stored compressed (chr{N}_hg38.pvar.zst); plink2 reads it in place.
-  plink2 --pfile "${REFDIR}/chr${chr}_hg38" vzs --keep "$KEEP" \
+  $PLINK2 --pfile "${REFDIR}/chr${chr}_hg38" vzs --keep "$KEEP" \
          --chr "$chr" --from-bp "$start" --to-bp "$end" \
          --snps-only --max-alleles 2 --maf "$MAF_MIN" \
          --make-pgen --out "${OUTDIR}/${tag}.panel" >/dev/null 2>&1 || {
@@ -142,7 +146,7 @@ tail -n +2 "$LOCI_TSV" | while IFS=$'\t' read -r gene chr lead_snp lead_pos ea o
 
   # 6. signed LD matrix on the harmonised set (r, NOT r^2), square
   if [[ -s "${OUTDIR}/${tag}.extract.ids" ]] && [[ $(wc -l < "${OUTDIR}/${tag}.extract.ids") -ge 2 ]]; then
-    plink2 --pfile "${OUTDIR}/${tag}.panel" --extract "${OUTDIR}/${tag}.extract.ids" \
+    $PLINK2 --pfile "${OUTDIR}/${tag}.panel" --extract "${OUTDIR}/${tag}.extract.ids" \
            --r-unphased square ref-based \
            --out "${OUTDIR}/${tag}" >/dev/null 2>&1 || echo "       [warn] plink2 --r failed for ${gene}"
     # plink2 writes <tag>.unphased.vcor1 (matrix) + <tag>.unphased.vcor1.vars (order).

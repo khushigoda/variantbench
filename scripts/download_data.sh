@@ -224,7 +224,10 @@ mkdir -p "$PANEL_DIR"
 if [[ ! -f "$PANEL_TSV" ]]; then
   echo "WARNING: $PANEL_TSV missing — skipping LD panel download (Step 4 needs it)." >&2
 else
-  command -v plink2 >/dev/null 2>&1 || { echo "ERROR: plink2 not on PATH (conda activate variantbench)"; exit 1; }
+  # plink2 lives in its own Rosetta/x86 env on arm64 Macs (no osx-arm64 bioconda build);
+  # reach it via `conda run -n plink2` by default, override PLINK2 if it's on PATH elsewhere.
+  PLINK2="${PLINK2:-conda run -n plink2 plink2}"
+  $PLINK2 --version >/dev/null 2>&1 || { echo "ERROR: plink2 not runnable via '$PLINK2' — create it with: CONDA_SUBDIR=osx-64 conda create -n plink2 -c conda-forge -c bioconda -y plink2"; exit 1; }
 
   # resolve which chromosomes to pull
   if [[ "${PANEL_CHRS:-}" == "all" ]]; then
@@ -260,7 +263,7 @@ else
   for c in $CHRS; do
     base="$PANEL_DIR/chr${c}_hg38"
     # pgen: MUST decompress (also validates the download; re-run resumes a partial then passes)
-    [[ -f "${base}.pgen" ]] || plink2 --zst-decompress "${base}.pgen.zst" "${base}.pgen" \
+    [[ -f "${base}.pgen" ]] || $PLINK2 --zst-decompress "${base}.pgen.zst" "${base}.pgen" \
       || { echo "ERROR: ${base}.pgen.zst failed to decompress (truncated? re-run to resume)"; exit 1; }
     # pvar: KEEP COMPRESSED, just give it the base name (--pfile ... vzs reads .pvar.zst)
     [[ -e "${base}.pvar.zst" ]] || ln -sf "chr${c}_hg38_rs.pvar.zst" "${base}.pvar.zst"

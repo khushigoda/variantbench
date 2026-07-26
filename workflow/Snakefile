@@ -276,7 +276,7 @@ rule make_ld:
         curate=config["ld_prep"]["curate"],
         anchors=config["ld_prep"]["anchors"],
         refdir=config["ld_prep"]["refdir"]
-    conda:  config["envs"]["main"]       # variantbench: plink2 + bcftools + base R (Rscript)
+    conda:  config["envs"]["main"]       # variantbench: bcftools + base R (Rscript); plink2 via `conda run -n plink2` (Rosetta env)
     shell:
         "TRAIT={wildcards.metabolite} "
         "WINDOW={params.window} SELECT_RADIUS={params.select_radius} "
