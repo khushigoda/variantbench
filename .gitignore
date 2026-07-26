@@ -1,6 +1,8 @@
 # --- data & large/derived files: NEVER commit ---
 data/
 results/**/*.tsv.gz
+results/**/*.bgz
+results/**/*.bgz.tbi
 results/**/*.bed
 *.bed
 *.bim

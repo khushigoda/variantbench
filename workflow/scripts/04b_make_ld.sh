@@ -73,6 +73,14 @@ RHELP="${RHELP:-workflow/scripts/04a_ld_helpers.R}"
 # plink2 lives in its own Rosetta/x86 conda env on arm64 Macs (no osx-arm64 bioconda build).
 # Default: reach it via `conda run -n plink2 plink2`; override PLINK2 if it's on PATH elsewhere.
 PLINK2="${PLINK2:-conda run -n plink2 plink2}"
+# bgzip/tabix give random-access region slices of the genome-wide (~5.4 GB) meta so each locus is a
+# SEEK, not a full decompression. Built ONCE, lazily, from the existing .meta.tsv.gz into sidecar files
+# (<trait>.meta.tsv.bgz + .tbi); the original .gz is NEVER modified (it is a tracked Snakemake output,
+# so touching it would perturb the DAG). Falls back to zcat|awk if bgzip/tabix are absent. Override the
+# binaries via BGZIP=/TABIX= if they live in a different env.
+BGZIP="${BGZIP:-bgzip}"
+TABIX="${TABIX:-tabix}"
+META_BGZ="${META_GZ%.gz}.bgz"     # sidecar bgzip copy (tabix needs bgzip, not plain gzip)
 [[ -f "$RHELP" ]] || { echo "[STOP] R helper '$RHELP' not found." >&2; exit 5; }
 
 # The 1000G phase3-GRCh38 panel (chr{N}_hg38 --pfile trios (.pgen + .pvar.zst + .psam)) is provisioned
@@ -113,6 +121,31 @@ KEEP="${REFDIR}/1kg_eur.keep"
 echo "[3/5] building EUR keep file from hg38_corrected.psam header ..."
 "$RSCRIPT" "$RHELP" keep "${REFDIR}/hg38_corrected.psam" "$KEEP"
 
+# ==================================== 3.5 index the meta ONCE (random-access region slices) =
+# The genome-wide meta (~5.4 GB) is otherwise fully decompressed once PER LOCUS just to keep the
+# ~few-thousand rows inside each window. Build a tabix index ONCE (reblock .gz -> .bgz, then index
+# on chr=col2/pos=col3, skipping the 1 header line) so every locus becomes a byte-range seek.
+# Both steps are guarded on mtime so a rerun reuses them; the original .meta.tsv.gz is untouched.
+USE_TABIX=0
+if command -v "$TABIX" >/dev/null 2>&1 && command -v "$BGZIP" >/dev/null 2>&1; then
+  if [[ ! -s "$META_BGZ" || "$META_GZ" -nt "$META_BGZ" ]]; then
+    echo "[3.5/5] reblocking meta -> bgzip (one-time; reads ${META_GZ} once, original untouched) ..."
+    zcat < "$META_GZ" | "$BGZIP" -c > "${META_BGZ}.tmp" && mv "${META_BGZ}.tmp" "$META_BGZ" \
+      || { echo "        [warn] bgzip reblock failed — falling back to zcat|awk" >&2; rm -f "${META_BGZ}.tmp"; }
+  fi
+  if [[ -s "$META_BGZ" && ( ! -s "${META_BGZ}.tbi" || "$META_BGZ" -nt "${META_BGZ}.tbi" ) ]]; then
+    echo "[3.5/5] building tabix index (chr=col2 pos=col3) ..."
+    "$TABIX" -s 2 -b 3 -e 3 -S 1 -f "$META_BGZ" \
+      || { echo "        [warn] tabix index failed (meta unsorted?) — falling back to zcat|awk" >&2; rm -f "${META_BGZ}.tbi"; }
+  fi
+  [[ -s "${META_BGZ}.tbi" ]] && USE_TABIX=1
+fi
+if [[ "$USE_TABIX" == "1" ]]; then
+  echo "[3.5/5] meta index ready -> per-locus GWAS slices via tabix seek."
+else
+  echo "[3.5/5] tabix/bgzip unavailable -> per-locus GWAS slices via zcat|awk (full scan each locus)."
+fi
+
 # ============================ 4-5. per-locus: extract -> harmonise -> signed LD matrix =
 # EUR filter (--keep) is applied per-locus at extraction — no whole-panel pre-subset needed.
 echo "[4-5/5] per-locus extract (EUR keep) + harmonise + signed LD ..."
@@ -137,9 +170,17 @@ tail -n +2 "$LOCI_TSV" | while IFS=$'\t' read -r gene chr lead_snp lead_pos ea o
            echo -e "${gene}\t${chr}\t${lead_snp}\t${lead_pos}\t$((2*WINDOW))\t0\t0\t0\t0\t0\t0\tNA\tEMPTY_PANEL" >> "$MANIFEST"; continue; }
 
   # 5. regional GWAS slice (meta: chr=$2 pos=$3 ea=$4 oa=$5 beta=$7 se=$8 z=$9 nlp=$11)
-  zcat < "$META_GZ" | awk -F'\t' -v c="$chr" -v s="$start" -v e="$end" \
-    'NR==1{print "chr\tpos\tea\toa\tz\tnlp"; next} $2==c && $3>=s && $3<=e {print $2"\t"$3"\t"$4"\t"$5"\t"$9"\t"$11}' \
-    > "${OUTDIR}/${tag}.gwas.tsv"
+  #    tabix path: seek only this window's byte range (no full decompression). zcat path: full scan.
+  #    Both emit the same 6-col header + rows, so harmonize is agnostic to which produced the slice.
+  { echo -e "chr\tpos\tea\toa\tz\tnlp"
+    if [[ "$USE_TABIX" == "1" ]]; then
+      "$TABIX" "$META_BGZ" "${chr}:${start}-${end}" \
+        | awk -F'\t' '{print $2"\t"$3"\t"$4"\t"$5"\t"$9"\t"$11}'
+    else
+      zcat < "$META_GZ" | awk -F'\t' -v c="$chr" -v s="$start" -v e="$end" \
+        'NR>1 && $2==c && $3>=s && $3<=e {print $2"\t"$3"\t"$4"\t"$5"\t"$9"\t"$11}'
+    fi
+  } > "${OUTDIR}/${tag}.gwas.tsv"
 
   # 5b. harmonise panel<->GWAS -> aligned z + extract list (position-ordered) — R half
   "$RSCRIPT" "$RHELP" harmonize "${OUTDIR}/${tag}.panel.pvar" "${OUTDIR}/${tag}.gwas.tsv" \
