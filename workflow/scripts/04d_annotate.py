@@ -208,10 +208,21 @@ FIELDS = ["trait","gene","chr","ID","POS","ea","oa","pip","z","r2_lead","cs","co
           "is_expected_gene","aa_change","codons","sift_pred","sift_score",
           "polyphen_pred","polyphen_score","biotype","allele_match","is_known_causal"]
 
+def _fmt(v):
+    # R-native booleans (TRUE/FALSE, matching 04c's cs_summary) so fread() reads
+    # them as logical, not the character strings "True"/"False".
+    if v is True:  return "TRUE"
+    if v is False: return "FALSE"
+    return v
+
 def write_tsv(path, rows):
+    # lineterminator="\n": Unix endings (csv default is \r\n, which leaves a stray
+    # \r on the last field for line-split readers).
     with open(path, "w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=FIELDS, delimiter="\t", extrasaction="ignore")
-        w.writeheader(); w.writerows(rows)
+        w = csv.DictWriter(fh, fieldnames=FIELDS, delimiter="\t",
+                           extrasaction="ignore", lineterminator="\n")
+        w.writeheader()
+        w.writerows({k: _fmt(v) for k, v in r.items()} for r in rows)
 
 write_tsv(OUT, rows_out)
 missense = [r for r in rows_out if r["is_missense"]]

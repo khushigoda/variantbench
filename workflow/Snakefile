@@ -112,7 +112,10 @@ rule all:
         expand("results/finemap/{metab}.susie_qc.tsv",           metab=config["ld_prep"]["finemap_metabolites"]),
         # Step 4d annotation (VEP missense) — traits configured for fine-mapping
         expand("results/finemap/{metab}.annot.tsv",          metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/finemap/{metab}.annot.missense.tsv", metab=config["ld_prep"]["finemap_metabolites"])
+        expand("results/finemap/{metab}.annot.missense.tsv", metab=config["ld_prep"]["finemap_metabolites"]),
+        # Step 4e report figures
+        expand("results/finemap/{metab}.finemap_summary.png",     metab=config["ld_prep"]["finemap_metabolites"]),
+        expand("results/finemap/{metab}.consequence_summary.png", metab=config["ld_prep"]["finemap_metabolites"])
 
 # =========================================================
 # Step 1 — meta-analysis (EstBB + UKBB_EUR -> meta), reads RAW files directly
@@ -351,6 +354,30 @@ rule annotate:
         "FMDIR=results/finemap LDDIR=results/ld OUTDIR=results/finemap "
         "COVERAGE={params.coverage} "
         "python workflow/scripts/04d_annotate.py"
+
+
+# ---------------------------------------------------------------
+# Step 4e — fine-mapping report figures (regional + QC + consequence)
+# ---------------------------------------------------------------
+# Renders report figures from the persisted 04c/04d tables only (never re-fits,
+# never re-queries VEP). ggplot2 + data.table (envs.r), no extra packages.
+rule finemap_plots:
+    input:
+        finemap="results/finemap/{metabolite}.finemap.tsv",
+        cs="results/finemap/{metabolite}.cs_summary.tsv",
+        qc="results/finemap/{metabolite}.susie_qc.tsv",
+        annot="results/finemap/{metabolite}.annot.tsv",
+        rscript="workflow/scripts/04e_finemap_plots.R"
+    output:
+        summary="results/finemap/{metabolite}.finemap_summary.png",       # per-locus QC
+        consequence="results/finemap/{metabolite}.consequence_summary.png" # coding-vs-regulatory
+        # also writes plots/{trait}.{gene}.regional.png (per locus) and
+        # {trait}.missense_table.png — not declared DAG outputs (count varies with loci)
+    conda:  config["envs"]["r"]
+    shell:
+        "TRAIT={wildcards.metabolite} "
+        "FMDIR=results/finemap LDDIR=results/ld OUTDIR=results/finemap "
+        "Rscript workflow/scripts/04e_finemap_plots.R"
 #
 # # =========================================================
 # # Step 5 — colocalization with molecular QTLs (coloc.abf)
