@@ -13,6 +13,17 @@ REF=data/ref
 mkdir -p "$RAW" "$REF"
 base_ftp="https://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics"
 
+# ---- section selector -------------------------------------------------------
+# Run only the sections you need (default = all). Sections: metab cad ldsc panel eqtl.
+#   bash scripts/download_data.sh panel        # only the LD panel (Step 4)
+#   bash scripts/download_data.sh metab ldsc   # exposures + LDSC reference
+#   bash scripts/download_data.sh              # everything
+# Guards mean re-running never re-fetches a complete file, but a FULL run still re-verifies
+# the multi-GB sumstats (gzip -t, several minutes); selecting `panel` skips all of that.
+SECTIONS="${*:-all}"
+want () { [[ " $SECTIONS " == *" all "* || " $SECTIONS " == *" $1 "* ]]; }
+# -----------------------------------------------------------------------------
+
 # ---- completeness checks ----------------------------------------------------
 # The old guard was `[[ -s FILE ]]` (non-empty). That treats a truncated/interrupted
 # download as "present" and skips it forever. These helpers verify a file is a COMPLETE
@@ -72,6 +83,7 @@ METAB=(
   "Glucose_UKBB_EUR:GCST90449628"
   "Glucose_metaEUR:GCST90451122"
 )
+if want metab; then
 for entry in "${METAB[@]}"; do
   name="${entry%%:*}"; acc="${entry##*:}"
   gz="$RAW/${name}.${acc}.tsv.gz"; meta="$RAW/${name}.${acc}.meta.yaml"
@@ -90,6 +102,7 @@ for entry in "${METAB[@]}"; do
   curl -L --fail -C - -o "$gz" "$url"
   complete_gz "$gz" "$meta" || { echo "ERROR: $name ($acc) still fails completeness check" >&2; exit 1; }
 done
+else echo ">> [skip] metabolite exposures (section not selected)"; fi
 
 # ---- 2. Disease OUTCOME sumstats for MR ----
 # CAD — Aragam et al. 2022. EUR-only:
@@ -102,6 +115,7 @@ done
 #   pulling harmonised CAD means NO self-liftover step is needed. This is also what the
 #   authors effectively did from their code (their Aragam_2022_..._harmonized.parquet).
 #   Filename pattern: <acc>.h.tsv.gz  (gzipped, ~1.3 GB)
+if want cad; then
 CAD_DIR="$base_ftp/GCST90132001-GCST90133000"
 for acc in GCST90132314; do
   gz="$RAW/CAD.${acc}.h.tsv.gz"
@@ -142,12 +156,14 @@ if [[ -e "$RAW/T2D.Suzuki2024.EUR.tsv.gz" ]]; then
 else
   echo "   (T2D EUR file not yet placed — manual step)"
 fi
+else echo ">> [skip] CAD/T2D outcome sumstats (section not selected)"; fi
 
 # ---- 3. LDSC reference data (Step 2) ----
 # HapMap3 SNP list (for munge --merge-alleles) and EUR LD scores (for --ref-ld/--w-ld).
 # Both guards verify a COMPLETE download (gzip stream valid), then materialize the
 # uncompressed forms the config points at: data/ref/w_hm3.snplist (file) and
 # data/ref/eur_w_ld_chr/ (DIRECTORY — the tar must be extracted, not just downloaded).
+if want ldsc; then
 if ! gzip_ok "$REF/w_hm3.snplist.gz"; then
   [[ -s "$REF/w_hm3.snplist.gz" ]] && echo ">> w_hm3.snplist.gz: incomplete — re-fetching (resume)"
   curl -L --fail -C - -o "$REF/w_hm3.snplist.gz" \
@@ -175,6 +191,7 @@ if [[ ! -d "$REF/eur_w_ld_chr" ]] || \
   echo ">> extracting eur_w_ld_chr.tar.gz"
   tar -xzf "$REF/eur_w_ld_chr.tar.gz" -C "$REF"
 fi
+else echo ">> [skip] LDSC reference data (section not selected)"; fi
 
 # ---- 4. LD reference panel — 1000G phase3 GRCh38 pgen (Step 4 fine-mapping) ----
 # 1000 Genomes phase 3, GRCh38, split-by-chromosome, rsID-annotated (dbSNP156),
@@ -193,24 +210,54 @@ fi
 # We deliberately do NOT depend on a standalone `zstd` binary (may be absent) — plink2 is
 # the only decompressor used. Each chr ends up as a `--pfile chr{N}_hg38 vzs` trio:
 # chr{N}_hg38.pgen (plain) + chr{N}_hg38.pvar.zst (compressed) + chr{N}_hg38.psam (symlink).
+# CHROMOSOME SCOPE: we only need the chromosomes our fine-mapping loci touch, not all 22.
+#   PANEL_CHRS defaults to the unique chromosomes in the anchor file (config/cad_effector_anchors.tsv)
+#   — the curated CAD set spans chr 1,2,5,6,7,8,9,11,16,19 (10 of 22, ~2.9 GB not ~5.6 GB).
+#   Override for a wider run:  PANEL_CHRS="1 2 3 ... 22"  or  PANEL_CHRS=all
+# Only the pgen/rs-pvar for the selected chromosomes (plus the one shared psam) are fetched;
+# every other line in panel_urls.tsv is skipped.
 PANEL_DIR="$REF/1kg_phase3_hg38"
 PANEL_TSV="config/panel_urls.tsv"
+ANCHORS_TSV="${ANCHORS:-config/cad_effector_anchors.tsv}"
+if want panel; then
 mkdir -p "$PANEL_DIR"
 if [[ ! -f "$PANEL_TSV" ]]; then
   echo "WARNING: $PANEL_TSV missing — skipping LD panel download (Step 4 needs it)." >&2
 else
   command -v plink2 >/dev/null 2>&1 || { echo "ERROR: plink2 not on PATH (conda activate variantbench)"; exit 1; }
-  # fetch every listed file (curl --fail rejects HTML error pages; -C - resumes partials)
+
+  # resolve which chromosomes to pull
+  if [[ "${PANEL_CHRS:-}" == "all" ]]; then
+    CHRS=$(seq 1 22)
+  elif [[ -n "${PANEL_CHRS:-}" ]]; then
+    CHRS="$PANEL_CHRS"
+  elif [[ -f "$ANCHORS_TSV" ]]; then
+    CHRS=$(grep -v '^#' "$ANCHORS_TSV" | awk -F'\t' 'NF>=3{print $2}' | sort -n -u | tr '\n' ' ')
+  else
+    echo "WARNING: no PANEL_CHRS and no anchor file '$ANCHORS_TSV' — defaulting to all 22." >&2
+    CHRS=$(seq 1 22)
+  fi
+  echo ">> LD panel: fetching chromosomes -> $CHRS"
+
+  # build the set of filenames we actually want (pgen + rs-pvar for CHRS, plus the shared psam)
+  # portable (bash 3.2 / macOS default): a space-delimited string, no associative arrays.
+  WANT_FILE=" "
+  for c in $CHRS; do
+    WANT_FILE="${WANT_FILE}chr${c}_hg38.pgen.zst chr${c}_hg38_rs.pvar.zst "
+  done
+  # fetch only the wanted files (curl --fail rejects HTML error pages; -C - resumes partials)
   while IFS=$'\t' read -r fname url; do
     [[ "$fname" =~ ^#|^$ ]] && continue
+    # always take the shared psam; otherwise only files in the wanted set
+    if [[ "$fname" != *.psam && "$WANT_FILE" != *" $fname "* ]]; then continue; fi
     out="$PANEL_DIR/$fname"
     [[ -s "$out" ]] && { echo ">> panel $fname: present, skipping download"; continue; }
     echo ">> panel $fname"; curl -L --fail -C - -o "$out" "$url" \
       || { echo "ERROR: download failed for $fname (link may be stale in $PANEL_TSV)"; exit 1; }
   done < "$PANEL_TSV"
 
-  # normalize each chromosome into a `--pfile <base> vzs` trio
-  for c in $(seq 1 22); do
+  # normalize each selected chromosome into a `--pfile <base> vzs` trio
+  for c in $CHRS; do
     base="$PANEL_DIR/chr${c}_hg38"
     # pgen: MUST decompress (also validates the download; re-run resumes a partial then passes)
     [[ -f "${base}.pgen" ]] || plink2 --zst-decompress "${base}.pgen.zst" "${base}.pgen" \
@@ -220,14 +267,17 @@ else
     # psam: one shared corrected file for every chromosome
     [[ -e "${base}.psam" ]]     || ln -sf "hg38_corrected.psam"       "${base}.psam"
   done
-  echo ">> LD panel ready: $PANEL_DIR/chr{1..22}_hg38.{pgen,pvar.zst,psam}  (read with --pfile ... vzs)"
+  echo ">> LD panel ready for chr [$CHRS]: $PANEL_DIR/chr{N}_hg38.{pgen,pvar.zst,psam}  (read with --pfile ... vzs)"
 fi
+else echo ">> [skip] LD reference panel (section not selected)"; fi
 
 # ---- 5. Molecular QTLs for colocalization (Step 5) ----
 # eQTL Catalogue (fine-mapped SuSiE credible sets / LBFs) for the coloc locus.
 # Pick the tissue/dataset once you know the locus (e.g. blood eQTL for GP6/lactate
 # or liver/skeletal-muscle for BCAA pathway). Browse:
 #   https://www.ebi.ac.uk/eqtl/  (FTP: https://ftp.ebi.ac.uk/pub/databases/spot/eQTL/)
+if want eqtl; then
 echo ">> eQTL Catalogue: select dataset for your coloc locus (see data/README.md)"
+fi
 
-echo "DONE. Verify md5sums against each *.meta.yaml (data_file_md5sum field)."
+echo "DONE (sections: $SECTIONS). Verify md5sums against each *.meta.yaml (data_file_md5sum field)."
