@@ -94,6 +94,7 @@ ld_prep:
   refdir:         data/ref/1kg_phase3_hg38          # local panel dir (provisioned by scripts/download_data.sh)
   # Panel itself (45 versioned URLs) lives in config/panel_urls.tsv, fetched by download_data.sh.
   finemap_metabolites: [LDL_C]  # traits to prep LD for (extend when doing other metabolites)
+  annot_coverage:      0.95     # Step-4d: CS coverage level annotated for missense (95% per take-home)
   info_min:       0.6           # imputation INFO QC (metabolites)
   coloc_priors:   {p1: 1.0e-4, p2: 1.0e-4, p12: 5.0e-6}
   mhc_region:     {chr: 6, start: 28510120, end: 33480577}  # excluded in fine-mapping
