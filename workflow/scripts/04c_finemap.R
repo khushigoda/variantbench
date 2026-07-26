@@ -38,6 +38,7 @@ OUTDIR  <- Sys.getenv("OUTDIR", "results/finemap")
 LEADTSV <- Sys.getenv("LEADTSV", file.path("results/loci", paste0(TRAIT, ".lead.tsv")))
 LOCI    <- Sys.getenv("LOCI",   "")            # optional CSV gene subset (smoke test)
 L_MAX   <- as.integer(Sys.getenv("L_MAX", "10"))
+MAXITER <- as.integer(Sys.getenv("MAX_ITER", "100"))    # susie_rss IBSS cap (susieR default 100)
 COV1    <- 0.95                                 # primary credible-set coverage
 COV2    <- 0.99                                 # secondary coverage (also emitted)
 MINCORR <- 0.5                                  # susie_get_cs purity floor (authors' min_cs_corr)
@@ -59,8 +60,8 @@ run_muffled <- function(expr) withCallingHandlers(expr,
   warning = function(w) if (grepl(BENIGN_WARN, conditionMessage(w))) invokeRestart("muffleWarning"),
   message = function(m) if (grepl(BENIGN_WARN, conditionMessage(m))) invokeRestart("muffleMessage"))
 
-cat(sprintf("== 04c SuSiE fine-mapping | trait=%s seed=%d L=%d coverage=%.2f/%.2f ==\n",
-            TRAIT, SEED, L_MAX, COV1, COV2))
+cat(sprintf("== 04c SuSiE fine-mapping | trait=%s seed=%d L=%d max_iter=%d coverage=%.2f/%.2f ==\n",
+            TRAIT, SEED, L_MAX, MAXITER, COV1, COV2))
 
 ## ---- loop driver + representative n ----------------------------------------
 loci_path <- file.path(LDDIR, paste0(TRAIT, ".loci.tsv"))
@@ -110,7 +111,8 @@ fit_one <- function(g) {
   fit <- run_muffled(susie_rss(z = z, R = R, n = n_loc, L = L_MAX,
                    estimate_residual_variance = FALSE,
                    estimate_prior_variance    = TRUE,
-                   scaled_prior_variance       = 0.1))
+                   scaled_prior_variance       = 0.1,
+                   max_iter                    = MAXITER))
   el <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
 
   cs95 <- run_muffled(susie_get_cs(fit, coverage = COV1, Xcorr = R, min_abs_corr = MINCORR))
