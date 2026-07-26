@@ -78,13 +78,28 @@ if (cmd == "select") {
   for (c in sp) if (any(dat[[c]] == "EUR")) { spcol <- c; break }
   if (is.na(spcol)) stop("no SuperPop column with value 'EUR' found in .psam")
   eur <- dat[dat[[spcol]] == "EUR", , drop = FALSE]
+  n_eur_all <- nrow(eur)
+  # Drop related individuals: the 3202-sample high-cov build includes 698 trio offspring
+  # (619 non-founders overall, ~108 in EUR). Relatives bias LD (shared haplotypes counted
+  # twice), so keep only unrelated FOUNDERS = both parents unknown (PAT==0 & MAT==0).
+  # Schema-detect the PAT/MAT columns so a release without them (e.g. an already-unrelated
+  # 2504 build) is used as-is.
+  patcol <- grep("^pat$|^father", hdr, ignore.case = TRUE, value = TRUE)
+  matcol <- grep("^mat$|^mother", hdr, ignore.case = TRUE, value = TRUE)
+  n_dropped <- 0L
+  if (length(patcol) && length(matcol)) {
+    is_founder <- as.character(eur[[patcol[1]]]) %in% c("0","") &
+                  as.character(eur[[matcol[1]]]) %in% c("0","")
+    n_dropped <- sum(!is_founder)
+    eur <- eur[is_founder, , drop = FALSE]
+  }
   idcols <- intersect(c("FID","IID"), hdr); if(!length(idcols)) idcols <- "IID"
   out <- eur[, idcols, drop = FALSE]
   writeLines(paste0("#", paste(idcols, collapse = "\t")), keep)
   write.table(out, keep, sep = "\t", quote = FALSE, row.names = FALSE,
               col.names = FALSE, append = TRUE)
-  cat(sprintf("    EUR samples: %d   (id cols: %s;  superpop col: %s)\n",
-              nrow(eur), paste(idcols, collapse="+"), spcol))
+  cat(sprintf("    EUR unrelated founders: %d   (of %d EUR; dropped %d relatives; id cols: %s; superpop col: %s)\n",
+              nrow(eur), n_eur_all, n_dropped, paste(idcols, collapse="+"), spcol))
 
 # --------------------------------------------------------------- subcommand: harmonize ---
 # Match panel<->GWAS on chr:pos + allele pair; allow ref/alt swap (flip z sign); drop

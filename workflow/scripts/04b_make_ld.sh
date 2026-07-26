@@ -12,13 +12,13 @@
 #          results/ld/LDL_C.ld_manifest.tsv        (per-locus QC: n_var, dropped, flags)
 #
 # DESIGN (decisions locked with reviewer):
-#   * Panel : 1000G phase3-on-GRCh38, 2504-sample PLINK2 pgen, SPLIT BY CHROMOSOME
+#   * Panel : 1000G phase3-on-GRCh38 HIGH-COV NYGC rebuild (3202-sample) PLINK2 pgen, SPLIT BY CHROMOSOME
 #             (chr{N}_hg38 --pfile trios (.pgen + .pvar.zst + .psam)). Provisioned ONCE by
 #             scripts/download_data.sh (whole panel, decompressed, "_rs" stripped from pvar
 #             names, shared hg38_corrected.psam symlinked per chr). This script only READS
 #             the local panel for whichever chromosomes the selected loci touch.
-#             High-cov 3202 build NOT used (adds only rare-variant resolution below our
-#             MAF>0.1% floor; needs relatedness pruning).
+#             Relatedness handled downstream: keep-file restricts to unrelated EUR FOUNDERS
+#             (525 of 633 EUR; 108 trio offspring dropped via PAT/MAT flags) so LD is unbiased.
 #   * Pop   : EUR only. Keep file built by INSPECTING the .psam header (ID + SuperPop
 #             columns detected at runtime — schema differs across 1000G releases).
 #   * Loci  : eligibility screen on the 321 leads, THEN curated CAD-effector genes.
@@ -82,7 +82,7 @@ mkdir -p "$OUTDIR"
 
 echo "=========================================================================="
 echo " 04b_make_ld.sh — Step-4 LD prep for ${TRAIT}"
-echo " window=+/-${WINDOW}bp  maf_min=${MAF_MIN}  panel=1000G-phase3-GRCh38(2504,EUR)"
+echo " window=+/-${WINDOW}bp  maf_min=${MAF_MIN}  panel=1000G-phase3-GRCh38(525 unrel EUR founders)"
 echo "=========================================================================="
 
 # ================================================ 1. locus table (screen + curate) =====
@@ -167,4 +167,4 @@ echo "[done] LD prep complete. Manifest:"
 column -t -s$'\t' "$MANIFEST" 2>/dev/null || cat "$MANIFEST"
 echo
 echo "Per-locus SuSiE inputs (Step 4): results/ld/${TRAIT}.<gene>.{ld,ld.vars,z.tsv}"
-echo "LD matrix = signed r (2504-EUR out-of-sample reference); z = meta, allele-aligned to panel ALT."
+echo "LD matrix = signed r (525-EUR-founder out-of-sample reference); z = meta, allele-aligned to panel ALT."
