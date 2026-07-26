@@ -126,9 +126,13 @@ tail -n +2 "$LOCI_TSV" | while IFS=$'\t' read -r gene chr lead_snp lead_pos ea o
 
   # 4. extract locus from per-chr panel, EUR-only: biallelic SNPs, MAF>0.1%, region-clipped
   #    vzs: pvar is stored compressed (chr{N}_hg38.pvar.zst); plink2 reads it in place.
+  #    --rm-dup exclude-all: the cog-genomics build split multiallelics into biallelic rows that
+  #    keep the SAME rsID, so --snps-only/--max-alleles 2 still lets duplicate-ID rows through.
+  #    A split-multiallelic rsID is ambiguous (can't map the GWAS z to a single allele pair), so
+  #    drop ALL copies — this keeps the LD matrix and the z-vector on one unambiguous variant set.
   $PLINK2 --pfile "${REFDIR}/chr${chr}_hg38" vzs --keep "$KEEP" \
          --chr "$chr" --from-bp "$start" --to-bp "$end" \
-         --snps-only --max-alleles 2 --maf "$MAF_MIN" \
+         --snps-only --max-alleles 2 --maf "$MAF_MIN" --rm-dup exclude-all \
          --make-pgen --out "${OUTDIR}/${tag}.panel" >/dev/null 2>&1 || {
            echo -e "${gene}\t${chr}\t${lead_snp}\t${lead_pos}\t$((2*WINDOW))\t0\t0\t0\t0\t0\t0\tNA\tEMPTY_PANEL" >> "$MANIFEST"; continue; }
 
@@ -153,7 +157,11 @@ tail -n +2 "$LOCI_TSV" | while IFS=$'\t' read -r gene chr lead_snp lead_pos ea o
     # Normalise names so Step-4 finds them predictably:
     [[ -f "${OUTDIR}/${tag}.unphased.vcor1" ]]      && mv "${OUTDIR}/${tag}.unphased.vcor1"      "${OUTDIR}/${tag}.ld"
     [[ -f "${OUTDIR}/${tag}.unphased.vcor1.vars" ]] && mv "${OUTDIR}/${tag}.unphased.vcor1.vars" "${OUTDIR}/${tag}.ld.vars"
-    echo "       wrote ${tag}.ld  (+ .ld.vars, .z.tsv)"
+    # align z-vector to the LD matrix's own variant order + assert the ID sets match exactly
+    # (SuSiE needs z[i] <-> R[i,i]; guarantee it by construction rather than by coincident sorting)
+    "$RSCRIPT" "$RHELP" alignz "${OUTDIR}/${tag}.ld.vars" "${OUTDIR}/${tag}.z.tsv" || {
+      echo "       [FAIL] z/LD alignment mismatch for ${gene} — see error above"; exit 1; }
+    echo "       wrote ${tag}.ld  (+ .ld.vars, .z.tsv, z aligned to LD order)"
   else
     echo "       [skip LD] too few harmonised variants for ${gene}"
   fi

@@ -121,7 +121,12 @@ if (cmd == "select") {
   n_panel <- nrow(pv); n_gwas <- nrow(gw)
   key <- function(chr,pos) paste(chr,pos,sep=":")
   gw$k <- key(gw$chr, gw$pos); pv$k <- key(pv$CHROM, pv$POS)
-  m <- merge(pv, gw, by="k")                             # match on chr:pos
+  # Drop ALL panel variants sharing a chr:pos with any other (two distinct rsIDs at one coordinate).
+  # plink2 --rm-dup handles same-ID duplicates; this handles the same-position/different-ID case that
+  # would otherwise fan out the position merge and desync the z-vector from the LD matrix.
+  dup_pos <- pv$k[duplicated(pv$k)]
+  if (length(dup_pos)) pv <- pv[!(pv$k %in% dup_pos), , drop = FALSE]
+  m <- merge(pv, gw, by="k")                             # match on chr:pos (now 1:1 on panel side)
   n_match_pos <- nrow(m)
   palin <- function(a,b){ p<-paste0(toupper(a),toupper(b)); p %in% c("AT","TA","CG","GC") }
   aligned_z <- rep(NA_real_, nrow(m)); keepflag <- logical(nrow(m)); swapped <- 0L; ndrop_pal <- 0L
@@ -150,4 +155,20 @@ if (cmd == "select") {
   cat(sprintf("       panel=%d gwas=%d pos-match=%d swapped=%d palindrome-drop=%d final=%d edge=%s\n",
       n_panel, n_gwas, n_match_pos, swapped, ndrop_pal, n_final, edge))
 
-} else stop(sprintf("unknown subcommand '%s' (select|keep|harmonize)", cmd))
+} else if (cmd == "alignz") {
+  # alignz <ld.vars> <z.tsv> : reorder z.tsv to the plink2 LD-matrix variant order (authoritative),
+  # and HARD-ASSERT the two ID sets are identical. SuSiE requires z[i] to correspond to row/col i of
+  # R; this makes that correspondence guaranteed-by-construction instead of relying on both files
+  # happening to be position-sorted the same way.
+  ldvars_f <- a[1]; z_f <- a[2]
+  ld_ids <- readLines(ldvars_f)
+  z <- read.delim(z_f, stringsAsFactors = FALSE)          # columns: ID POS z
+  if (!setequal(ld_ids, z$ID))
+    stop(sprintf("alignz: ID-set mismatch — LD matrix has %d vars, z has %d, %d only-in-LD, %d only-in-z",
+                 length(ld_ids), nrow(z),
+                 length(setdiff(ld_ids, z$ID)), length(setdiff(z$ID, ld_ids))))
+  z <- z[match(ld_ids, z$ID), , drop = FALSE]             # reorder z rows to LD-matrix order
+  write.table(z, z_f, sep = "\t", quote = FALSE, row.names = FALSE)
+  cat(sprintf("       alignz: z reordered to LD order (%d variants, sets identical)\n", length(ld_ids)))
+
+} else stop(sprintf("unknown subcommand '%s' (select|keep|harmonize|alignz)", cmd))
