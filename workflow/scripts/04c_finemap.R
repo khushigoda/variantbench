@@ -46,8 +46,18 @@ GWS_P   <- as.numeric(Sys.getenv("GWS_P", "5e-8"))       # genome-wide sig (conf
 ZTHRESH <- qnorm(GWS_P / 2, lower.tail = FALSE)          # |z| cutoff for a "real" CS (~5.45 at 5e-8)
 
 set.seed(SEED)
+options(warn = 1)                               # print warnings at their source, not buffered to end
 suppressWarnings(setDTthreads(0))               # all cores for fread / matrix coercion
 dir.create(OUTDIR, showWarnings = FALSE, recursive = TRUE)
+
+## Muffle ONLY the known-benign susieR warnings that all cascade from non-PSD out-of-sample LD
+## (susieR zeroes negative eigenvalues and reconstructs R, whose FP asymmetry re-trips its own
+## symmetry check). The substantive signal is captured as structured QC data (kriging_s column),
+## so these console lines are pure noise. Any UNEXPECTED warning still surfaces.
+BENIGN_WARN <- "not symmetric|positive semidefinite|Rfast|forcing (XtX|Xcorr)"
+run_muffled <- function(expr) withCallingHandlers(expr,
+  warning = function(w) if (grepl(BENIGN_WARN, conditionMessage(w))) invokeRestart("muffleWarning"),
+  message = function(m) if (grepl(BENIGN_WARN, conditionMessage(m))) invokeRestart("muffleMessage"))
 
 cat(sprintf("== 04c SuSiE fine-mapping | trait=%s seed=%d L=%d coverage=%.2f/%.2f ==\n",
             TRAIT, SEED, L_MAX, COV1, COV2))
@@ -84,7 +94,7 @@ fit_one <- function(g) {
   vars <- fread(paste0(base, ".ld.vars"), header = FALSE)$V1
   zdt  <- fread(paste0(base, ".z.tsv"))                        # ID POS z
   R    <- as.matrix(fread(paste0(base, ".ld"), header = FALSE))
-  R    <- (R + t(R)) / 2          # enforce exact symmetry (no-op numerically; silences susieR's internal warning)
+  R    <- (R + t(R)) / 2          # defensive symmetry normalization (make_ld output is already symmetric; cheap insurance)
 
   # make_ld guarantees identical ordering across the three files — assert it, don't assume it
   p <- length(vars)
@@ -97,18 +107,18 @@ fit_one <- function(g) {
 
   z <- zdt$z
   t0 <- Sys.time()
-  fit <- susie_rss(z = z, R = R, n = n_loc, L = L_MAX,
+  fit <- run_muffled(susie_rss(z = z, R = R, n = n_loc, L = L_MAX,
                    estimate_residual_variance = FALSE,
                    estimate_prior_variance    = TRUE,
-                   scaled_prior_variance       = 0.1)
+                   scaled_prior_variance       = 0.1))
   el <- as.numeric(difftime(Sys.time(), t0, units = "secs"))
 
-  cs95 <- susie_get_cs(fit, coverage = COV1, Xcorr = R, min_abs_corr = MINCORR)
-  cs99 <- susie_get_cs(fit, coverage = COV2, Xcorr = R, min_abs_corr = MINCORR)
+  cs95 <- run_muffled(susie_get_cs(fit, coverage = COV1, Xcorr = R, min_abs_corr = MINCORR))
+  cs99 <- run_muffled(susie_get_cs(fit, coverage = COV2, Xcorr = R, min_abs_corr = MINCORR))
   pip  <- fit$pip
 
   # LD-mismatch diagnostic (kriging): s in [0,1], 0=consistent, ->1=severe out-of-sample mismatch
-  s_est <- tryCatch(estimate_s_rss(z = z, R = R, n = n_loc),
+  s_est <- tryCatch(run_muffled(estimate_s_rss(z = z, R = R, n = n_loc)),
                     error = function(e) NA_real_)
 
   lead_idx <- match(lsnp, vars)
@@ -122,25 +132,27 @@ fit_one <- function(g) {
     is_lead = vars == lsnp
   )
 
-  cs_summary <- NULL
-  if (length(cs95$cs)) {
-    cs_summary <- rbindlist(lapply(seq_along(cs95$cs), function(k) {
-      idx <- cs95$cs[[k]]; top <- idx[which.max(pip[idx])]
+  # per-CS summary rows for a given coverage's susie_get_cs result
+  summarise_cs <- function(cs_obj, cov) {
+    if (!length(cs_obj$cs)) return(NULL)
+    rbindlist(lapply(seq_along(cs_obj$cs), function(k) {
+      idx <- cs_obj$cs[[k]]; top <- idx[which.max(pip[idx])]
       cs_max_absz <- max(abs(z[idx]))
       data.table(
-        trait = TRAIT, gene = g, chr = row$chr,
-        cs = cs95$cs_index[k], cs_size = length(idx),
+        trait = TRAIT, gene = g, chr = row$chr, coverage = cov,
+        cs = cs_obj$cs_index[k], cs_size = length(idx),
         top_variant = vars[top], top_pos = zdt$POS[top], top_pip = pip[top],
         cs_pip_sum = sum(pip[idx]),
-        min_r2  = cs95$purity$min.abs.corr[k]^2,
-        mean_r2 = cs95$purity$mean.abs.corr[k]^2,
-        low_purity = cs95$purity$min.abs.corr[k] < LOWPUR,
+        min_r2  = cs_obj$purity$min.abs.corr[k]^2,
+        mean_r2 = cs_obj$purity$mean.abs.corr[k]^2,
+        low_purity = cs_obj$purity$min.abs.corr[k] < LOWPUR,
         cs_max_absz = cs_max_absz,
-        pass_filter = cs_max_absz > ZTHRESH,   # TRUE = contains a genome-wide-sig variant (real signal)
-        coverage = COV1
+        pass_filter = cs_max_absz > ZTHRESH    # TRUE = contains a genome-wide-sig variant (real signal)
       )
     }))
   }
+  cs_summary <- rbindlist(list(summarise_cs(cs95, COV1), summarise_cs(cs99, COV2)), fill = TRUE)
+  if (nrow(cs_summary) == 0) cs_summary <- NULL
 
   qc <- data.table(
     trait = TRAIT, gene = g, chr = row$chr,
@@ -183,17 +195,20 @@ qc_out <- rbindlist(all_qc, fill = TRUE)
 
 fwrite(fm_out, file.path(OUTDIR, paste0(TRAIT, ".finemap.tsv")),    sep = "\t")
 if (nrow(cs_out) == 0)
-  cs_out <- data.table(trait=character(), gene=character(), chr=integer(), cs=integer(), cs_size=integer(),
+  cs_out <- data.table(trait=character(), gene=character(), chr=integer(), coverage=double(),
+                       cs=integer(), cs_size=integer(),
                        top_variant=character(), top_pos=integer(), top_pip=double(), cs_pip_sum=double(),
                        min_r2=double(), mean_r2=double(), low_purity=logical(),
-                       cs_max_absz=double(), pass_filter=logical(), coverage=double())
+                       cs_max_absz=double(), pass_filter=logical())
+setorder(cs_out, gene, -coverage, cs)          # group each gene's 95% then 99% rows together
 fwrite(cs_out, file.path(OUTDIR, paste0(TRAIT, ".cs_summary.tsv")), sep = "\t")
-# filtered view: only CS containing a genome-wide-significant variant (drops LD-mismatch artifacts)
+# filtered view: only CS containing a genome-wide-significant variant (drops LD-mismatch artifacts); both coverages
 cs_filt <- cs_out[pass_filter == TRUE]
 fwrite(cs_filt, file.path(OUTDIR, paste0(TRAIT, ".cs_summary.filtered.tsv")), sep = "\t")
 fwrite(qc_out, file.path(OUTDIR, paste0(TRAIT, ".susie_qc.tsv")),   sep = "\t")
 
-cat(sprintf("\n[done] %d loci fit | %d CS (95%%, all) | %d pass filter | %d variants total\n",
-            nrow(qc_out), nrow(cs_out), nrow(cs_filt), nrow(fm_out)))
+cs95_n <- nrow(cs_out[coverage == COV1]); cs99_n <- nrow(cs_out[coverage == COV2])
+cat(sprintf("\n[done] %d loci fit | CS: %d@95%% + %d@99%% | %d pass filter | %d variants total\n",
+            nrow(qc_out), cs95_n, cs99_n, nrow(cs_filt), nrow(fm_out)))
 cat(sprintf("       -> %s/{%s.finemap.tsv, %s.cs_summary.tsv, %s.cs_summary.filtered.tsv, %s.susie_qc.tsv} + per-locus .susie.rds\n",
             OUTDIR, TRAIT, TRAIT, TRAIT, TRAIT))
