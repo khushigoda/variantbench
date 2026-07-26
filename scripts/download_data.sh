@@ -269,8 +269,16 @@ else
     [[ -e "${base}.pvar.zst" ]] || ln -sf "chr${c}_hg38_rs.pvar.zst" "${base}.pvar.zst"
     # psam: one shared corrected file for every chromosome
     [[ -e "${base}.psam" ]]     || ln -sf "hg38_corrected.psam"       "${base}.psam"
+    # VALIDATE the trio: pgen/pvar variant counts must agree, else plink2 refuses to pair them.
+    # This guards against a stale-generation pgen paired with a newer pvar (the exact bug that
+    # produced 'PgfiInitPhase1() raw_variant_ct mismatch' — pgen and pvar from different Dropbox
+    # link-generations). Fail loudly here at download time, not cryptically mid-analysis.
+    $PLINK2 --pfile "${base}" vzs --validate >/dev/null 2>&1 \
+      || { echo "ERROR: chr${c} pgen/pvar mismatch (validate failed). The .pgen and .pvar.zst are from"; \
+           echo "       different releases. Fix the chr${c} .pgen URL in $PANEL_TSV, delete"; \
+           echo "       ${base}.pgen{,.zst}, and re-run 'bash $0 panel'."; exit 1; }
   done
-  echo ">> LD panel ready for chr [$CHRS]: $PANEL_DIR/chr{N}_hg38.{pgen,pvar.zst,psam}  (read with --pfile ... vzs)"
+  echo ">> LD panel ready for chr [$CHRS]: $PANEL_DIR/chr{N}_hg38.{pgen,pvar.zst,psam}  (validated; read with --pfile ... vzs)"
 fi
 else echo ">> [skip] LD reference panel (section not selected)"; fi
 

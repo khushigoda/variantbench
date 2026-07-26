@@ -1,25 +1,30 @@
 # 1000 Genomes phase 3, GRCh38, split-by-chromosome, rsID-annotated (dbSNP156), KING-corrected.
 # Source: cog-genomics.org/plink/2.0/resources (extracted 2026-07). Columns: filename<TAB>url
 # pgen.zst = genotypes; _rs.pvar.zst = variant table WITH rsIDs; hg38_corrected.psam = shared sample file.
-chr1_hg38.pgen.zst	https://www.dropbox.com/s/w4uextemsj4gkkq/chr1_hg38.pgen.zst?dl=1
-chr2_hg38.pgen.zst	https://www.dropbox.com/s/x73g577yna1ajaq/chr2_hg38.pgen.zst?dl=1
+# WARNING: pgen and pvar must come from the SAME cog-genomics release generation, else plink2 rejects
+#   the pair ('PgfiInitPhase1 raw_variant_ct mismatch'). The pgen URLs for chr {1,2,5,6,7,8,9,11,16,19}
+#   were corrected 2026-07 to match the _rs pvar generation. The OTHER 12 pgen URLs are still the older
+#   generation and MAY mismatch — download_data.sh now runs `plink2 --validate` per chr and fails loudly
+#   if so; replace the offending pgen URL with the current cog-genomics link before a whole-genome run.
+chr1_hg38.pgen.zst	https://www.dropbox.com/s/k5tul2pe5wytjlz/chr1_hg38.pgen.zst?dl=1
+chr2_hg38.pgen.zst	https://www.dropbox.com/s/nsgqqahbfk4u9r8/chr2_hg38.pgen.zst?dl=1
 chr3_hg38.pgen.zst	https://www.dropbox.com/s/itfwch5ml7jh448/chr3_hg38.pgen.zst?dl=1
 chr4_hg38.pgen.zst	https://www.dropbox.com/s/y9tfh7dxb4mr6gz/chr4_hg38.pgen.zst?dl=1
-chr5_hg38.pgen.zst	https://www.dropbox.com/s/ej7dxarvvetupx1/chr5_hg38.pgen.zst?dl=1
-chr6_hg38.pgen.zst	https://www.dropbox.com/s/z4k3n6t6i3em96n/chr6_hg38.pgen.zst?dl=1
-chr7_hg38.pgen.zst	https://www.dropbox.com/s/mwjzn4rjayesebs/chr7_hg38.pgen.zst?dl=1
-chr8_hg38.pgen.zst	https://www.dropbox.com/s/74gnwhxpda9jxpm/chr8_hg38.pgen.zst?dl=1
-chr9_hg38.pgen.zst	https://www.dropbox.com/s/r70tih37l0hfjhx/chr9_hg38.pgen.zst?dl=1
+chr5_hg38.pgen.zst	https://www.dropbox.com/s/wg01ye3cn06mm8e/chr5_hg38.pgen.zst?dl=1
+chr6_hg38.pgen.zst	https://www.dropbox.com/s/7l4ozeaze53mlny/chr6_hg38.pgen.zst?dl=1
+chr7_hg38.pgen.zst	https://www.dropbox.com/s/qiqiq91gjnlejj5/chr7_hg38.pgen.zst?dl=1
+chr8_hg38.pgen.zst	https://www.dropbox.com/s/dvtewdfrsa63orj/chr8_hg38.pgen.zst?dl=1
+chr9_hg38.pgen.zst	https://www.dropbox.com/s/321ercemdimyh8j/chr9_hg38.pgen.zst?dl=1
 chr10_hg38.pgen.zst	https://www.dropbox.com/s/fjdlwghtp4xsj91/chr10_hg38.pgen.zst?dl=1
-chr11_hg38.pgen.zst	https://www.dropbox.com/s/6us4jt1nkxse5cu/chr11_hg38.pgen.zst?dl=1
+chr11_hg38.pgen.zst	https://www.dropbox.com/s/jiykipnk2qleubn/chr11_hg38.pgen.zst?dl=1
 chr12_hg38.pgen.zst	https://www.dropbox.com/s/ztmomcla14h27ty/chr12_hg38.pgen.zst?dl=1
 chr13_hg38.pgen.zst	https://www.dropbox.com/s/c95ooiutv84c4ue/chr13_hg38.pgen.zst?dl=1
 chr14_hg38.pgen.zst	https://www.dropbox.com/s/r4djvti6z8oujv8/chr14_hg38.pgen.zst?dl=1
 chr15_hg38.pgen.zst	https://www.dropbox.com/s/m59imoujmevxj6j/chr15_hg38.pgen.zst?dl=1
-chr16_hg38.pgen.zst	https://www.dropbox.com/s/y5n59e3u053jcxi/chr16_hg38.pgen.zst?dl=1
+chr16_hg38.pgen.zst	https://www.dropbox.com/s/bwyzc8qo7jtk8uj/chr16_hg38.pgen.zst?dl=1
 chr17_hg38.pgen.zst	https://www.dropbox.com/s/7mv6ll4cl6yt3zg/chr17_hg38.pgen.zst?dl=1
 chr18_hg38.pgen.zst	https://www.dropbox.com/s/3l3bh78o27ctgsu/chr18_hg38.pgen.zst?dl=1
-chr19_hg38.pgen.zst	https://www.dropbox.com/s/70poz0v2m2vzxym/chr19_hg38.pgen.zst?dl=1
+chr19_hg38.pgen.zst	https://www.dropbox.com/s/xfyp8uymflqts78/chr19_hg38.pgen.zst?dl=1
 chr20_hg38.pgen.zst	https://www.dropbox.com/s/fxdi6vnfam1bz9c/chr20_hg38.pgen.zst?dl=1
 chr21_hg38.pgen.zst	https://www.dropbox.com/s/r6mqzrbvm8hdkif/chr21_hg38.pgen.zst?dl=1
 chr22_hg38.pgen.zst	https://www.dropbox.com/s/zwfnqwhabs0kwkb/chr22_hg38.pgen.zst?dl=1
