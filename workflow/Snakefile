@@ -104,7 +104,12 @@ rule all:
         expand("results/loci/{metab}.manhattan.png", metab=METABOLITES),
         # Step 4a LD-matrix prep (only the traits configured for fine-mapping)
         expand("results/ld/{metab}.loci.tsv",        metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/ld/{metab}.ld_manifest.tsv", metab=config["ld_prep"]["finemap_metabolites"])
+        expand("results/ld/{metab}.ld_manifest.tsv", metab=config["ld_prep"]["finemap_metabolites"]),
+        # Step 4c fine-mapping (SuSiE) — traits configured for fine-mapping
+        expand("results/finemap/{metab}.finemap.tsv",            metab=config["ld_prep"]["finemap_metabolites"]),
+        expand("results/finemap/{metab}.cs_summary.tsv",         metab=config["ld_prep"]["finemap_metabolites"]),
+        expand("results/finemap/{metab}.cs_summary.filtered.tsv",metab=config["ld_prep"]["finemap_metabolites"]),
+        expand("results/finemap/{metab}.susie_qc.tsv",           metab=config["ld_prep"]["finemap_metabolites"])
 
 # =========================================================
 # Step 1 — meta-analysis (EstBB + UKBB_EUR -> meta), reads RAW files directly
@@ -285,26 +290,37 @@ rule make_ld:
         "REFDIR={params.refdir} "
         "bash workflow/scripts/04b_make_ld.sh"
 
-#
-# # =========================================================
-# # Step 4 — fine-mapping (SuSiE) + missense/splice annotation
-# # =========================================================
-# rule finemap:
-#     input:
-#         meta="results/meta/{metabolite}.meta.tsv.gz",
-#         lead="results/loci/{metabolite}.lead.tsv"
-#     output:
-#         annot="results/finemap/{metabolite}.annot.tsv",
-#         # Number of loci is data-dependent, so we can't name each PNG in advance.
-#         # A directory() output lets the script drop one PIP/regional plot per locus
-#         # inside it while keeping the DAG valid.
-#         plotdir=directory("results/finemap/{metabolite}_plots")
-#     params:
-#         seed=config["params"]["seed"],
-#         panel=config["ref"]["geno_panel"],
-#         mhc=config["params"]["mhc_region"]
-#     conda:  config["envs"]["r"]
-#     script: "scripts/04_finemap.R"
+
+# =========================================================
+# Step 4c — fine-mapping (SuSiE, z-mode, one locus at a time)
+# =========================================================
+# Inputs are the Step-4a make_ld products (per-locus .ld/.ld.vars/.z.tsv + loci.tsv),
+# NEVER the genome-wide meta — 04c reads only results/ld/<trait>.* + the lead table (for n).
+# The per-locus .ld/.z files are named data-dependently, so loci.tsv (produced together with
+# them by make_ld) is the DAG trigger; the script loops over it internally.
+rule finemap:
+    input:
+        loci="results/ld/{metabolite}.loci.tsv",
+        manifest="results/ld/{metabolite}.ld_manifest.tsv",
+        lead="results/loci/{metabolite}.lead.tsv",
+        rscript="workflow/scripts/04c_finemap.R"
+    output:
+        finemap="results/finemap/{metabolite}.finemap.tsv",       # per-variant PIP / CS / r2_lead
+        cs="results/finemap/{metabolite}.cs_summary.tsv",         # per-CS summary, 95% + 99%, + pass_filter
+        cs_filt="results/finemap/{metabolite}.cs_summary.filtered.tsv",  # CS with a genome-wide-sig variant
+        qc="results/finemap/{metabolite}.susie_qc.tsv"            # convergence + kriging_s LD-mismatch
+        # per-locus <trait>.<gene>.susie.rds also written (regenerable scratch; gitignored, not a DAG output)
+    params:
+        seed=config["params"]["seed"],
+        gws_p=config["params"]["gws_p"],
+        lmax=config["ld_prep"].get("finemap_L", 10)
+    conda:  config["envs"]["r"]
+    shell:
+        "TRAIT={wildcards.metabolite} SEED={params.seed} "
+        "LDDIR=results/ld OUTDIR=results/finemap "
+        "LEADTSV={input.lead} "
+        "GWS_P={params.gws_p} L_MAX={params.lmax} "
+        "Rscript workflow/scripts/04c_finemap.R"
 #
 # # =========================================================
 # # Step 5 — colocalization with molecular QTLs (coloc.abf)
