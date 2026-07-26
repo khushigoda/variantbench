@@ -15,6 +15,10 @@ METABOLITES = list(config["metabolites"].keys())
 COHORTS     = config["cohorts"]
 OUTCOMES    = list(config["outcomes"].keys())
 META        = config["meta_name"]
+DATASETS    = config["ldsc_datasets"]   # Step-2 rg datasets: [EstBB, UKBB_EUR, meta_EUR]
+# Step-2 trait subset: run LDSC on just these traits (defaults to ALL if not set in config).
+# Lets you run a fast subset (e.g. [BCAA, Lactate]) without touching Step-1 METABOLITES.
+LDSC_METABOLITES = config.get("ldsc_metabolites", METABOLITES)
 
 # NOTE (scope: Steps 0-2 today). Steps 3-8 are deferred and live in a commented block
 # at the bottom of this file. They depend on config keys that are intentionally still
@@ -28,7 +32,8 @@ wildcard_constraints:
     metabolite = "|".join(METABOLITES),
     cohort     = "|".join(COHORTS),
     outcome    = "|".join(OUTCOMES),
-    metab      = "|".join(METABOLITES)
+    metab      = "|".join(METABOLITES),
+    dataset    = "|".join(DATASETS)
 
 # ---------- helpers to resolve raw input paths ----------
 def metab_raw_file(metabolite, cohort):
@@ -40,6 +45,15 @@ def raw_by_tag(metabolite, tag):
     """Raw per-tag sumstats path; tag is a cohort (EstBB/UKBB_EUR) or the meta accession."""
     acc = config["metabolites"][metabolite]["accession"][tag]
     return f"data/raw/{metabolite}_{tag}.{acc}.tsv.gz"
+
+def ldsc_dataset_input(metabolite, dataset):
+    """Step-2 munge input for a (trait, dataset) pair, and the adapter 'kind' it needs.
+    EstBB / UKBB_EUR  -> raw per-cohort GWAS-SSF   (kind=raw:  carries info -> INFO>=0.9 fires)
+    meta_EUR          -> OUR Step-1 meta output    (kind=meta: no info col -> HM3+MAF only).
+    Returns (path, kind)."""
+    if dataset == "meta_EUR":
+        return f"results/meta/{metabolite}.meta.tsv.gz", "meta"
+    return raw_by_tag(metabolite, dataset), "raw"
 
 # Columns each raw file contributes to its per-chr split (1-based GWAS-SSF positions).
 # Cohorts carry rsid (col 9) + n (col 13); the published meta has no rsid, n is col 11.
@@ -77,12 +91,20 @@ rule all:
         expand("results/meta/{metab}.concordance.png",  metab=METABOLITES),
         expand("results/meta/{metab}.validation.png",   metab=METABOLITES),
         expand("results/meta/{metab}.validation.tsv",   metab=METABOLITES),
-        # Step 2 LDSC
-        expand("results/ldsc/{metab}.h2.log", metab=METABOLITES),
-        "results/ldsc/rg.tsv",
+        # Step 2 LDSC — 3 datasets x LDSC_METABOLITES (paper replication)
+        expand("results/ldsc/{metab}.{dataset}.h2.log", metab=LDSC_METABOLITES, dataset=DATASETS),
         "results/ldsc/h2.tsv",
-        "results/ldsc/rg_heatmap.png",
-        "results/ldsc/h2_barplot.png"
+        "results/ldsc/rg_between_biobanks.tsv",   # Analysis A: 3 datasets, per trait
+        "results/ldsc/rg_between_traits.tsv",     # Analysis B: traits within each dataset
+        "results/ldsc/h2_barplot.png",
+        "results/ldsc/rg_between_biobanks.png",
+        "results/ldsc/rg_between_traits.png",
+        # Step 3 lead variants + Manhattan (per trait)
+        expand("results/loci/{metab}.lead.tsv",      metab=METABOLITES),
+        expand("results/loci/{metab}.manhattan.png", metab=METABOLITES),
+        # Step 4a LD-matrix prep (only the traits configured for fine-mapping)
+        expand("results/ld/{metab}.loci.tsv",        metab=config["ld_prep"]["finemap_metabolites"]),
+        expand("results/ld/{metab}.ld_manifest.tsv", metab=config["ld_prep"]["finemap_metabolites"])
 
 # =========================================================
 # Step 1 — meta-analysis (EstBB + UKBB_EUR -> meta), reads RAW files directly
@@ -117,64 +139,86 @@ rule meta_analysis:
 # Step 2 — heritability & genetic correlation (LDSC, Python-2 env)
 # =========================================================
 rule ldsc_munge:
-    # meta table carries a SIGNED z (sign = effect direction). Feeding signed-sumstats
-    # z,0 avoids reconstructing p at ultra-significant loci (underflow-safe), consistent
-    # with how 01 derives -log10 p in log-space. The SNP column holds the native rsID
-    # (01_meta.R coalesces rsid_e/rsid_u; only variants missing an rsID in BOTH cohorts
-    # get a positional id, and those simply don't match w_hm3.snplist and are dropped).
+    # One munge job per (trait, dataset) = 3 x 4 = 12 jobs. munge does the QC itself:
+    #   - --merge-alleles w_hm3.snplist  -> HapMap3 restriction + allele harmonisation
+    #     (flip-align to the HM3 reference, drop strand-ambiguous / mismatched variants).
+    #   - default --maf-min 0.01 fires because we name the freq column FRQ (auto-detected).
+    #   - default --info-min 0.9 fires ONLY for the raw cohorts, which carry an INFO column;
+    #     meta_EUR has no INFO col (kind=meta) so INFO filtering is n/a there, by design.
+    # The adapter (scripts/ldsc_munge_input.sh) is a FORMAT bridge + HapMap3 pre-restriction.
+    # It fixes the three things munge can't (neg_log10(P) -> real P with 1e-300 floor, N as
+    # float since Py2.7 pandas rejects an integer N column, canonical column names) AND filters
+    # to the ~1.2M HapMap3 rsIDs FIRST via a streaming awk join against w_hm3.snplist.
+    # WHY pre-restrict: the raw cohorts are genome-wide (26-104M variants). If munge sees the
+    # full file it parses every row into a Py2.7 pandas DataFrame BEFORE --merge-alleles drops
+    # the ~99% non-HM3 rows. Feeding it a ~1.2M-row HM3-restricted file avoids that.
     #
-    # PRE-RESTRICTION (scripts/ldsc_prep_hm3.sh): munging the full genome-wide meta
-    # directly fails two ways, so we hand munge a slim HapMap3-only input instead:
-    #   1. eaf is NA for ~76% of variants (UKBB-only rows carry no allele frequency), and
-    #      munge does dropna(how="any") across EVERY column it reads — so those variants
-    #      would be discarded before the HapMap3 merge, a large needless power loss. LDSC
-    #      h2/rg never use allele frequency, so we drop eaf.
-    #   2. munge runs on Python-2.7 / old pandas, which infers the integer n column as
-    #      object dtype and rejects it ("Columns ['N'] are expected to be numeric"), even
-    #      though n is clean integers across all 103M rows. Emitting n as a float makes the
-    #      old issubdtype(...,number) check pass unambiguously.
-    # The prep step also collapses 103M gzip-chunked rows to one ~1.2M-row uncompressed
-    # file, so munge reads it in a single pass. --merge-alleles is KEPT for allele
-    # harmonisation/QC (flip-align to HM3 ref, drop ambiguous), which pre-filtering doesn't do.
-    input:  "results/meta/{metabolite}.meta.tsv.gz"
-    output: "results/ldsc/{metabolite}.sumstats.gz"
-    params: hm3=config["ref"]["hm3_snplist"], ldsc_env=config["envs"]["ldsc"]
+    # WHY --chunksize 200000: munge's default chunksize (5e6) exceeds our ~1.2M-row HM3 file, so
+    # the default processes it as ONE chunk and runs the --merge-alleles membership test
+    #   ii = dat.SNP.isin(merge_alleles.SNP)          # munge_sumstats.py parse_dat
+    # once over a 1.2M-vs-1.2M string Series. Under LDSC's pinned pandas 0.20.3 that single
+    # large-vs-large isin is super-linear (sort-based np.in1d, Python-level string compares).
+    # Processing in 200k-row chunks runs the same test in small batches -- 7 x isin(200k) is far
+    # cheaper than 1 x isin(1.2M) -- reducing each munge job to ~20s. Any chunksize above 1.2M has
+    # no effect (still one chunk), so 200k is the load-bearing value.
+    #
+    # Result is IDENTICAL regardless of chunk size: --merge-alleles STILL runs (allele harmonise
+    # + strand-ambiguous drop) and the FRQ/INFO QC defaults STILL fire; chunking only changes
+    # how the rows are batched through pandas. Signed statistic = BETA (paired with P), authors.
+    input:  lambda w: ldsc_dataset_input(w.metabolite, w.dataset)[0]
+    output: "results/ldsc/{metabolite}.{dataset}.sumstats.gz"
+    params:
+        hm3=config["ref"]["hm3_snplist"],
+        ldsc_env=config["envs"]["ldsc"],
+        kind=lambda w: ldsc_dataset_input(w.metabolite, w.dataset)[1]
     shell:
         r"""
         mkdir -p results/ldsc
-        slim=results/ldsc/{wildcards.metabolite}.hm3.tsv
-        bash scripts/ldsc_prep_hm3.sh {input} {params.hm3} $slim
+        mungein=results/ldsc/{wildcards.metabolite}.{wildcards.dataset}.mungein.tsv.gz
+        bash scripts/ldsc_munge_input.sh {params.kind} {input} $mungein {params.hm3}
         conda run -n {params.ldsc_env} python ~/ldsc/munge_sumstats.py \
-            --sumstats $slim --merge-alleles {params.hm3} \
-            --out results/ldsc/{wildcards.metabolite} \
-            --snp SNP --a1 ea --a2 oa --N-col n --signed-sumstats z,0
-        rm -f $slim
+            --sumstats $mungein --merge-alleles {params.hm3} \
+            --out results/ldsc/{wildcards.metabolite}.{wildcards.dataset} \
+            --snp SNP --a1 A1 --a2 A2 --N-col N --signed-sumstats BETA,0 --p P \
+            --chunksize 200000
+        rm -f $mungein
         """
 
 rule ldsc_h2:
-    input:  "results/ldsc/{metabolite}.sumstats.gz"
-    output: "results/ldsc/{metabolite}.h2.log"
+    input:  "results/ldsc/{metabolite}.{dataset}.sumstats.gz"
+    output: "results/ldsc/{metabolite}.{dataset}.h2.log"
     params: ld=config["ref"]["ld_scores"], ldsc_env=config["envs"]["ldsc"]
     shell:
         r"""
         mkdir -p results/ldsc
         conda run -n {params.ldsc_env} python ~/ldsc/ldsc.py \
             --h2 {input} --ref-ld-chr {params.ld} --w-ld-chr {params.ld} \
-            --out results/ldsc/{wildcards.metabolite}.h2
+            --out results/ldsc/{wildcards.metabolite}.{wildcards.dataset}.h2
         """
 
 rule ldsc_rg:
+    # Both paper analyses in one R step, over the 12 munged files:
+    #   A (between biobanks, per trait): for each trait, staircase-rg the 3 datasets -> 12 rg
+    #   B (between traits, per dataset): for each dataset, staircase-rg the 4 traits -> 18 rg
+    # The R script drives ldsc.py --rg (ldsc env) and parses the h2 + rg logs into tidy TSVs.
     input:
-        sumstats=expand("results/ldsc/{metab}.sumstats.gz", metab=METABOLITES),
-        h2=expand("results/ldsc/{metab}.h2.log", metab=METABOLITES)
+        sumstats=expand("results/ldsc/{metab}.{dataset}.sumstats.gz",
+                        metab=LDSC_METABOLITES, dataset=DATASETS),
+        h2=expand("results/ldsc/{metab}.{dataset}.h2.log",
+                  metab=LDSC_METABOLITES, dataset=DATASETS)
     output:
-        rg="results/ldsc/rg.tsv",
-        h2="results/ldsc/h2.tsv",                  # parsed Total Observed scale h2 + SE + intercept
-        rg_plot="results/ldsc/rg_heatmap.png",     # genetic-correlation heatmap (§3)
-        h2_plot="results/ldsc/h2_barplot.png"      # h2 +/- SE bar across metabolites (§3)
-    params: seed=config["params"]["seed"], ld=config["ref"]["ld_scores"], ldsc_env=config["envs"]["ldsc"]
+        h2="results/ldsc/h2.tsv",                              # parsed h2 + SE + intercept (12 rows)
+        rg_bb="results/ldsc/rg_between_biobanks.tsv",          # Analysis A (12 rg)
+        rg_tr="results/ldsc/rg_between_traits.tsv",            # Analysis B (18 rg)
+        h2_plot="results/ldsc/h2_barplot.png",                 # h2 +/- SE, faceted by dataset
+        rg_bb_plot="results/ldsc/rg_between_biobanks.png",     # per-trait 3x3 biobank heatmaps
+        rg_tr_plot="results/ldsc/rg_between_traits.png"        # per-dataset 4x4 trait heatmaps
+    params:
+        seed=config["params"]["seed"], ld=config["ref"]["ld_scores"],
+        ldsc_env=config["envs"]["ldsc"],
+        metabs=LDSC_METABOLITES, datasets=DATASETS
     conda:  config["envs"]["r"]
-    script: "scripts/02_ldsc_rg.R"     # runs ldsc --rg, parses h2/rg logs -> tsv + plots
+    script: "scripts/02_ldsc_rg.R"
 
 # =========================================================
 # Steps 3-8 — DEFERRED (out of today's scope: Steps 0-2 only).
@@ -187,22 +231,60 @@ rule ldsc_rg:
 # scripts/00_normalize.R, still on disk — outcome harmonization + T2D GRCh37->38 liftover)
 # when re-enabling Steps 6-7.
 # =========================================================
-# # =========================================================
-# # Step 3 — lead variants & loci
-# # =========================================================
-# rule lead_variants:
-#     input:  meta="results/meta/{metabolite}.meta.tsv.gz"
-#     output:
-#         lead="results/loci/{metabolite}.lead.tsv",
-#         plot="results/loci/{metabolite}.manhattan.png"
-#     params:
-#         seed=config["params"]["seed"],
-#         gws_p=config["params"]["gws_p"],
-#         window=config["params"]["locus_window"],
-#         r2=config["params"]["clump_r2_lead"],
-#         panel=config["ref"]["geno_panel"]
-#     conda:  config["envs"]["r"]
-#     script: "scripts/03_leadvars.R"
+# =========================================================
+# Step 3 — lead variants & loci (summary-statistics-only, no LD panel)
+#   Dual MAF-dependent significance threshold + distance-based locus definition.
+#   The paper's r2-based locus-merge and cross-trait clustering need a EUR genotype
+#   panel (not provided by the brief) and are deferred to the LD-aware follow-on.
+# =========================================================
+rule lead_variants:
+    input:  meta="results/meta/{metabolite}.meta.tsv.gz"
+    output:
+        lead="results/loci/{metabolite}.lead.tsv",
+        plot="results/loci/{metabolite}.manhattan.png"
+    params:
+        seed=config["params"]["seed"],
+        gws_p=config["params"]["gws_p"],
+        rare_gws_p=config["params"]["rare_gws_p"],
+        maf_rare=config["params"]["maf_rare"],
+        locus_window=config["params"]["locus_window"]
+    conda:  config["envs"]["r"]
+    script: "scripts/03_leadvars.R"
+
+
+# =========================================================
+# Step 4a — LD-matrix prep for fine-mapping (per trait, wildcard-driven)
+#   Trait is a wildcard; every knob comes from config[ld_prep]; the CAD-effector
+#   curation is optional (config curate: 1 now, 0 later for the whole lead list).
+#   Bash orchestrator (04b_make_ld.sh) driven entirely by env vars — nothing hardcoded.
+#   Outputs are the two predictable files; per-locus .ld/.ld.vars/.z.tsv land in results/ld/.
+# =========================================================
+rule make_ld:
+    input:
+        lead="results/loci/{metabolite}.lead.tsv",
+        meta="results/meta/{metabolite}.meta.tsv.gz",
+        rhelp="workflow/scripts/04a_ld_helpers.R",
+        anchors=config["ld_prep"]["anchors"]
+    output:
+        loci="results/ld/{metabolite}.loci.tsv",
+        manifest="results/ld/{metabolite}.ld_manifest.tsv"
+    params:
+        window=config["ld_prep"]["window"],
+        select_radius=config["ld_prep"]["select_radius"],
+        maf_min=config["ld_prep"]["maf_min"],
+        edge_flag_bp=config["ld_prep"]["edge_flag_bp"],
+        curate=config["ld_prep"]["curate"],
+        anchors=config["ld_prep"]["anchors"],
+        refdir=config["ld_prep"]["refdir"]
+    conda:  config["envs"]["main"]       # variantbench: plink2 + bcftools + base R (Rscript)
+    shell:
+        "TRAIT={wildcards.metabolite} "
+        "WINDOW={params.window} SELECT_RADIUS={params.select_radius} "
+        "MAF_MIN={params.maf_min} EDGE_FLAG_BP={params.edge_flag_bp} "
+        "CURATE={params.curate} ANCHORS={params.anchors} "
+        "REFDIR={params.refdir} "
+        "bash workflow/scripts/04b_make_ld.sh"
+
 #
 # # =========================================================
 # # Step 4 — fine-mapping (SuSiE) + missense/splice annotation
@@ -286,11 +368,13 @@ rule ldsc_rg:
 #         validation_tsv=expand("results/meta/{metab}.validation.tsv", metab=METABOLITES),
 #         validation=expand("results/meta/{metab}.validation.png", metab=METABOLITES),
 #         concordance=expand("results/meta/{metab}.concordance.png", metab=METABOLITES),
-#         h2=expand("results/ldsc/{metab}.h2.log", metab=METABOLITES),
+#         h2=expand("results/ldsc/{metab}.{dataset}.h2.log", metab=METABOLITES, dataset=DATASETS),
 #         h2_tsv="results/ldsc/h2.tsv",
-#         rg="results/ldsc/rg.tsv",
-#         rg_plot="results/ldsc/rg_heatmap.png",
+#         rg_bb="results/ldsc/rg_between_biobanks.tsv",
+#         rg_tr="results/ldsc/rg_between_traits.tsv",
 #         h2_plot="results/ldsc/h2_barplot.png",
+#         rg_bb_plot="results/ldsc/rg_between_biobanks.png",
+#         rg_tr_plot="results/ldsc/rg_between_traits.png",
 #         lead=expand("results/loci/{metab}.lead.tsv", metab=METABOLITES),
 #         manhattan=expand("results/loci/{metab}.manhattan.png", metab=METABOLITES),
 #         annot=expand("results/finemap/{metab}.annot.tsv", metab=METABOLITES),

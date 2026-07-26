@@ -1,0 +1,16 @@
+# CAD / lipid effector gene anchors (GRCh38). Columns: gene<TAB>chr<TAB>anchor_bp
+# Curation (CURATE=1) keeps the strongest eligible lead within SELECT_RADIUS of each anchor.
+# To fine-map a different trait's effector set, point ld_prep.anchors at another file like this.
+PCSK9	1	55039447
+SORT1	1	109817590
+APOB	2	21001429
+ABCG5_8	2	43846406
+HMGCR	5	75336329
+LPA	6	160664275
+NPC1L1	7	44552134
+LPL	8	19956018
+ABCA1	9	104781004
+APOA5	11	116789367
+CETP	16	56961923
+LDLR	19	11089362
+APOE	19	44905791

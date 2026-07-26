@@ -176,7 +176,54 @@ if [[ ! -d "$REF/eur_w_ld_chr" ]] || \
   tar -xzf "$REF/eur_w_ld_chr.tar.gz" -C "$REF"
 fi
 
-# ---- 4. Molecular QTLs for colocalization (Step 5) ----
+# ---- 4. LD reference panel — 1000G phase3 GRCh38 pgen (Step 4 fine-mapping) ----
+# 1000 Genomes phase 3, GRCh38, split-by-chromosome, rsID-annotated (dbSNP156),
+# KING-pedigree-corrected. Source: cog-genomics.org/plink/2.0/resources.
+# The 45 versioned Dropbox URLs (22 pgen + 22 _rs.pvar + 1 shared corrected .psam) live
+# in config/panel_urls.tsv (extracted from the resources page; they change over time —
+# re-extract if a link 404s). We pull the WHOLE panel here so the Step-4 analysis script
+# is pure "read local data + analyze" with no download logic. ~5.6 GB compressed.
+#
+# PLINK2 .zst handling (per the resource page's own note):
+#   * .pgen.zst  MUST be decompressed before use  -> `plink2 --zst-decompress` (also our
+#                integrity gate: a truncated .zst fails here, so we never skip a bad file).
+#   * .pvar.zst  does NOT need decompressing  -> `--pfile <base> vzs` reads it compressed.
+#                We keep it zipped (saves ~4 GB across 22 chr) and just give it the base
+#                name PLINK expects: chr{N}_hg38.pvar.zst (dropping the "_rs" tag).
+# We deliberately do NOT depend on a standalone `zstd` binary (may be absent) — plink2 is
+# the only decompressor used. Each chr ends up as a `--pfile chr{N}_hg38 vzs` trio:
+# chr{N}_hg38.pgen (plain) + chr{N}_hg38.pvar.zst (compressed) + chr{N}_hg38.psam (symlink).
+PANEL_DIR="$REF/1kg_phase3_hg38"
+PANEL_TSV="config/panel_urls.tsv"
+mkdir -p "$PANEL_DIR"
+if [[ ! -f "$PANEL_TSV" ]]; then
+  echo "WARNING: $PANEL_TSV missing — skipping LD panel download (Step 4 needs it)." >&2
+else
+  command -v plink2 >/dev/null 2>&1 || { echo "ERROR: plink2 not on PATH (conda activate variantbench)"; exit 1; }
+  # fetch every listed file (curl --fail rejects HTML error pages; -C - resumes partials)
+  while IFS=$'\t' read -r fname url; do
+    [[ "$fname" =~ ^#|^$ ]] && continue
+    out="$PANEL_DIR/$fname"
+    [[ -s "$out" ]] && { echo ">> panel $fname: present, skipping download"; continue; }
+    echo ">> panel $fname"; curl -L --fail -C - -o "$out" "$url" \
+      || { echo "ERROR: download failed for $fname (link may be stale in $PANEL_TSV)"; exit 1; }
+  done < "$PANEL_TSV"
+
+  # normalize each chromosome into a `--pfile <base> vzs` trio
+  for c in $(seq 1 22); do
+    base="$PANEL_DIR/chr${c}_hg38"
+    # pgen: MUST decompress (also validates the download; re-run resumes a partial then passes)
+    [[ -f "${base}.pgen" ]] || plink2 --zst-decompress "${base}.pgen.zst" "${base}.pgen" \
+      || { echo "ERROR: ${base}.pgen.zst failed to decompress (truncated? re-run to resume)"; exit 1; }
+    # pvar: KEEP COMPRESSED, just give it the base name (--pfile ... vzs reads .pvar.zst)
+    [[ -e "${base}.pvar.zst" ]] || ln -sf "chr${c}_hg38_rs.pvar.zst" "${base}.pvar.zst"
+    # psam: one shared corrected file for every chromosome
+    [[ -e "${base}.psam" ]]     || ln -sf "hg38_corrected.psam"       "${base}.psam"
+  done
+  echo ">> LD panel ready: $PANEL_DIR/chr{1..22}_hg38.{pgen,pvar.zst,psam}  (read with --pfile ... vzs)"
+fi
+
+# ---- 5. Molecular QTLs for colocalization (Step 5) ----
 # eQTL Catalogue (fine-mapped SuSiE credible sets / LBFs) for the coloc locus.
 # Pick the tissue/dataset once you know the locus (e.g. blood eQTL for GP6/lactate
 # or liver/skeletal-muscle for BCAA pathway). Browse:

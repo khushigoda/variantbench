@@ -38,6 +38,17 @@ metabolites:
 cohorts:   [EstBB, UKBB_EUR]   # meta-analysis inputs (Step 1) — EUR ONLY
 meta_name: metaEUR            # validation target accession key
 
+# ---- Step-2 LDSC datasets (paper replication) ----
+# The paper runs rg "between biobanks for each trait" and "between all traits in three
+# of the largest datasets (EstBB, UKBB_EUR and meta_EUR)". These are the three datasets
+# Step 2 correlates. EstBB/UKBB_EUR resolve to the raw per-cohort GWAS-SSF; meta_EUR is
+# OUR Step-1 meta output (results/meta/{trait}.meta.tsv.gz) — it carries native rsID.
+ldsc_datasets: [EstBB, UKBB_EUR, meta_EUR]
+# Step-2 trait subset. Set to all 4 for the full replication; [BCAA, Lactate] for a fast run.
+# With 4 traits: Analysis A (between-biobanks) = C(3,2)=3 rg x 4 traits = 12; Analysis B
+# (between-traits) = C(4,2)=6 rg x 3 datasets = 18. With 2 traits: 6 and 3 respectively.
+ldsc_metabolites: [BCAA, Lactate, LDL_C, Glucose]
+
 # ---- Outcomes (MR, Steps 6-7) ----
 outcomes:
   CAD:
@@ -63,12 +74,26 @@ ref:
 # ---- Analysis parameters ----
 params:
   seed:           1123          # global RNG seed; set in every R step for reproducibility
-  gws_p:          5.0e-8        # genome-wide significance
+  gws_p:          5.0e-8        # genome-wide significance (common/low-freq, MAF>0.1%)
+  rare_gws_p:     6.25e-10      # Step-3 rare-variant threshold = 0.05/80e6 (paper's Bonferroni)
+  maf_rare:       0.001         # Step-3 common-vs-rare MAF split (0.1%)
   locus_window:   2000000       # lead-variant locus width (Step 3)
   clump_r2_lead:  0.05          # merge neighbouring loci
   clump_r2_instr: 0.01          # MR instrument pruning
   cis_window:     200000        # +/- bp for cis-MR (Step 7)
   maf_min:        0.01          # MR instrument MAF floor
+
+# ---- Step 4: LD-matrix prep for fine-mapping (rule make_ld) ---------------------------
+ld_prep:
+  window:         500000        # +/- fine-mapping window (bp), fixed for every locus
+  select_radius:  500000        # gene anchor claims strongest eligible lead within this (bp)
+  maf_min:        0.001         # panel QC floor (MAF > 0.1%)
+  edge_flag_bp:   50000         # manifest flag if signal within this many bp of window edge
+  curate:         1             # 1 = curated effector loci (anchors below); 0 = every eligible lead
+  anchors:        config/cad_effector_anchors.tsv   # gene<TAB>chr<TAB>anchor_bp (swap per trait)
+  refdir:         data/ref/1kg_phase3_hg38          # local panel dir (provisioned by scripts/download_data.sh)
+  # Panel itself (45 versioned URLs) lives in config/panel_urls.tsv, fetched by download_data.sh.
+  finemap_metabolites: [LDL_C]  # traits to prep LD for (extend when doing other metabolites)
   info_min:       0.6           # imputation INFO QC (metabolites)
   coloc_priors:   {p1: 1.0e-4, p2: 1.0e-4, p12: 5.0e-6}
   mhc_region:     {chr: 6, start: 28510120, end: 33480577}  # excluded in fine-mapping
