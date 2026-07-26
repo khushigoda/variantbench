@@ -1,0 +1,9 @@
+metric,my_value,paper_benchmark,assessment
+cross-biobank rg (EstBB vs UKBB_EUR) — BCAA,0.833 (se 0.029),median 0.91 / mean 0.89 across 249 traits,same-trait cross-biobank rg near unity — reproduces the paper's positive control
+cross-biobank rg (EstBB vs UKBB_EUR) — Lactate,0.864 (se 0.060),median 0.91 / mean 0.89 across 249 traits,same-trait cross-biobank rg near unity — reproduces the paper's positive control
+cross-biobank rg (EstBB vs UKBB_EUR) — LDL_C,0.853 (se 0.046),median 0.91 / mean 0.89 across 249 traits,same-trait cross-biobank rg near unity — reproduces the paper's positive control
+cross-biobank rg (EstBB vs UKBB_EUR) — Glucose,0.897 (se 0.049),median 0.91 / mean 0.89 across 249 traits,same-trait cross-biobank rg near unity — reproduces the paper's positive control
+SNP h2 (meta_EUR) — BCAA,"6.5% (se 0.5%), intercept 1.081","range 2.8%-19.5%, median 10.2% across 249 traits","within paper distribution, lower half of range"
+SNP h2 (meta_EUR) — Lactate,"3.9% (se 0.3%), intercept 1.080","range 2.8%-19.5%, median 10.2% across 249 traits","within paper distribution, lower half of range"
+SNP h2 (meta_EUR) — LDL_C,"11.7% (se 2.1%), intercept 1.162","range 2.8%-19.5%, median 10.2% across 249 traits","within paper distribution, upper half of range (highest of the four)"
+SNP h2 (meta_EUR) — Glucose,"5.1% (se 0.5%), intercept 1.078","range 2.8%-19.5%, median 10.2% across 249 traits","within paper distribution, lower half of range"

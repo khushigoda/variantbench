@@ -1,0 +1,65 @@
+*********************************************************************
+* LD Score Regression (LDSC)
+* Version 1.0.1
+* (C) 2014-2019 Brendan Bulik-Sullivan and Hilary Finucane
+* Broad Institute of MIT and Harvard / MIT Department of Mathematics
+* GNU General Public License v3
+*********************************************************************
+Call: 
+./ldsc.py \
+--ref-ld-chr data/ref/eur_w_ld_chr/ \
+--out results/ldsc/rgA_LDL_C_UKBB_EUR \
+--rg results/ldsc/LDL_C.UKBB_EUR.sumstats.gz,results/ldsc/LDL_C.meta_EUR.sumstats.gz \
+--w-ld-chr data/ref/eur_w_ld_chr/ 
+
+Beginning analysis at Sun Jul 26 05:09:56 2026
+Reading summary statistics from results/ldsc/LDL_C.UKBB_EUR.sumstats.gz ...
+Read summary statistics for 1177565 SNPs.
+Reading reference panel LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read reference panel LD Scores for 1290028 SNPs.
+Removing partitioned LD Scores with zero variance.
+Reading regression weight LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read regression weight LD Scores for 1290028 SNPs.
+After merging with reference panel LD, 1170909 SNPs remain.
+After merging with regression SNP LD, 1170909 SNPs remain.
+Computing rg for phenotype 2/2
+Reading summary statistics from results/ldsc/LDL_C.meta_EUR.sumstats.gz ...
+Read summary statistics for 1217311 SNPs.
+After merging with summary statistics, 1170909 SNPs remain.
+1169762 SNPs with valid alleles.
+
+Heritability of phenotype 1
+---------------------------
+Total Observed scale h2: 0.07 (0.0291)
+Lambda GC: 1.3615
+Mean Chi^2: 1.9437
+Intercept: 1.3207 (0.2452)
+Ratio: 0.3398 (0.2598)
+
+Heritability of phenotype 2/2
+-----------------------------
+Total Observed scale h2: 0.0813 (0.0257)
+Lambda GC: 1.4998
+Mean Chi^2: 2.4672
+Intercept: 1.4328 (0.3088)
+Ratio: 0.295 (0.2105)
+
+Genetic Covariance
+------------------
+Total Observed scale gencov: 0.0729 (0.027)
+Mean z1*z2: 1.9527
+Intercept: 1.1701 (0.2693)
+
+Genetic Correlation
+-------------------
+Genetic Correlation: 0.9668 (0.0071)
+Z-score: 136.6756
+P: 0.
+
+
+Summary of Genetic Correlation Results
+p1                                       p2      rg      se         z    p  h2_obs  h2_obs_se  h2_int  h2_int_se  gcov_int  gcov_int_se
+results/ldsc/LDL_C.UKBB_EUR.sumstats.gz  results/ldsc/LDL_C.meta_EUR.sumstats.gz  0.9668  0.0071  136.6756  0.0  0.0813     0.0257  1.4328     0.3088    1.1701       0.2693
+
+Analysis finished at Sun Jul 26 05:10:07 2026
+Total time elapsed: 10.71s

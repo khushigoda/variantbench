@@ -1,0 +1,119 @@
+*********************************************************************
+* LD Score Regression (LDSC)
+* Version 1.0.1
+* (C) 2014-2019 Brendan Bulik-Sullivan and Hilary Finucane
+* Broad Institute of MIT and Harvard / MIT Department of Mathematics
+* GNU General Public License v3
+*********************************************************************
+Call: 
+./ldsc.py \
+--ref-ld-chr data/ref/eur_w_ld_chr/ \
+--out results/ldsc/rgB_EstBB_BCAA \
+--rg results/ldsc/BCAA.EstBB.sumstats.gz,results/ldsc/Lactate.EstBB.sumstats.gz,results/ldsc/LDL_C.EstBB.sumstats.gz,results/ldsc/Glucose.EstBB.sumstats.gz \
+--w-ld-chr data/ref/eur_w_ld_chr/ 
+
+Beginning analysis at Sun Jul 26 05:10:39 2026
+Reading summary statistics from results/ldsc/BCAA.EstBB.sumstats.gz ...
+Read summary statistics for 1151181 SNPs.
+Reading reference panel LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read reference panel LD Scores for 1290028 SNPs.
+Removing partitioned LD Scores with zero variance.
+Reading regression weight LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read regression weight LD Scores for 1290028 SNPs.
+After merging with reference panel LD, 1144282 SNPs remain.
+After merging with regression SNP LD, 1144282 SNPs remain.
+Computing rg for phenotype 2/4
+Reading summary statistics from results/ldsc/Lactate.EstBB.sumstats.gz ...
+Read summary statistics for 1217311 SNPs.
+After merging with summary statistics, 1144282 SNPs remain.
+1144282 SNPs with valid alleles.
+
+Heritability of phenotype 1
+---------------------------
+Total Observed scale h2: 0.0625 (0.0062)
+Lambda GC: 1.194
+Mean Chi^2: 1.2586
+Intercept: 1.0297 (0.0105)
+Ratio: 0.1149 (0.0408)
+
+Heritability of phenotype 2/4
+-----------------------------
+Total Observed scale h2: 0.0264 (0.0038)
+Lambda GC: 1.1555
+Mean Chi^2: 1.1733
+Intercept: 1.0774 (0.0109)
+Ratio: 0.4467 (0.0632)
+
+Genetic Covariance
+------------------
+Total Observed scale gencov: 0.0107 (0.0028)
+Mean z1*z2: 0.204
+Intercept: 0.1634 (0.006)
+
+Genetic Correlation
+-------------------
+Genetic Correlation: 0.2635 (0.0636)
+Z-score: 4.1455
+P: 3.391e-05
+
+Computing rg for phenotype 3/4
+Reading summary statistics from results/ldsc/LDL_C.EstBB.sumstats.gz ...
+Read summary statistics for 1217311 SNPs.
+After merging with summary statistics, 1144282 SNPs remain.
+1144282 SNPs with valid alleles.
+
+Heritability of phenotype 3/4
+-----------------------------
+Total Observed scale h2: 0.0942 (0.0511)
+Lambda GC: 1.3068
+Mean Chi^2: 1.7101
+Intercept: 1.3358 (0.2096)
+Ratio: 0.4729 (0.2952)
+
+Genetic Covariance
+------------------
+Total Observed scale gencov: 0.015 (0.0047)
+Mean z1*z2: 0.1617
+Intercept: 0.1109 (0.0092)
+
+Genetic Correlation
+-------------------
+Genetic Correlation: 0.1957 (0.0688)
+Z-score: 2.8445
+P: 0.0044
+
+Computing rg for phenotype 4/4
+Reading summary statistics from results/ldsc/Glucose.EstBB.sumstats.gz ...
+Read summary statistics for 1217311 SNPs.
+After merging with summary statistics, 1144282 SNPs remain.
+1144282 SNPs with valid alleles.
+
+Heritability of phenotype 4/4
+-----------------------------
+Total Observed scale h2: 0.0339 (0.0054)
+Lambda GC: 1.1301
+Mean Chi^2: 1.1688
+Intercept: 1.0438 (0.0099)
+Ratio: 0.2595 (0.0587)
+
+Genetic Covariance
+------------------
+Total Observed scale gencov: 0.0103 (0.0026)
+Mean z1*z2: 0.1017
+Intercept: 0.0665 (0.006)
+
+Genetic Correlation
+-------------------
+Genetic Correlation: 0.2236 (0.0592)
+Z-score: 3.7755
+P: 0.0002
+
+
+Summary of Genetic Correlation Results
+p1                                      p2      rg      se       z           p  h2_obs  h2_obs_se  h2_int  h2_int_se  gcov_int  gcov_int_se
+results/ldsc/BCAA.EstBB.sumstats.gz  results/ldsc/Lactate.EstBB.sumstats.gz  0.2635  0.0636  4.1455  3.3910e-05  0.0264     0.0038  1.0774     0.0109    0.1634       0.0060
+results/ldsc/BCAA.EstBB.sumstats.gz    results/ldsc/LDL_C.EstBB.sumstats.gz  0.1957  0.0688  2.8445  4.4481e-03  0.0942     0.0511  1.3358     0.2096    0.1109       0.0092
+results/ldsc/BCAA.EstBB.sumstats.gz  results/ldsc/Glucose.EstBB.sumstats.gz  0.2236  0.0592  3.7755  1.5968e-04  0.0339     0.0054  1.0438     0.0099    0.0665       0.0060
+
+Analysis finished at Sun Jul 26 05:10:59 2026
+Total time elapsed: 20.09s

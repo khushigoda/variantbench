@@ -1,0 +1,65 @@
+*********************************************************************
+* LD Score Regression (LDSC)
+* Version 1.0.1
+* (C) 2014-2019 Brendan Bulik-Sullivan and Hilary Finucane
+* Broad Institute of MIT and Harvard / MIT Department of Mathematics
+* GNU General Public License v3
+*********************************************************************
+Call: 
+./ldsc.py \
+--ref-ld-chr data/ref/eur_w_ld_chr/ \
+--out results/ldsc/rgA_BCAA_UKBB_EUR \
+--rg results/ldsc/BCAA.UKBB_EUR.sumstats.gz,results/ldsc/BCAA.meta_EUR.sumstats.gz \
+--w-ld-chr data/ref/eur_w_ld_chr/ 
+
+Beginning analysis at Sun Jul 26 05:08:56 2026
+Reading summary statistics from results/ldsc/BCAA.UKBB_EUR.sumstats.gz ...
+Read summary statistics for 1177565 SNPs.
+Reading reference panel LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read reference panel LD Scores for 1290028 SNPs.
+Removing partitioned LD Scores with zero variance.
+Reading regression weight LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read regression weight LD Scores for 1290028 SNPs.
+After merging with reference panel LD, 1170909 SNPs remain.
+After merging with regression SNP LD, 1170909 SNPs remain.
+Computing rg for phenotype 2/2
+Reading summary statistics from results/ldsc/BCAA.meta_EUR.sumstats.gz ...
+Read summary statistics for 1217311 SNPs.
+After merging with summary statistics, 1170909 SNPs remain.
+1169762 SNPs with valid alleles.
+
+Heritability of phenotype 1
+---------------------------
+Total Observed scale h2: 0.0774 (0.0066)
+Lambda GC: 1.4175
+Mean Chi^2: 1.6906
+Intercept: 1.0566 (0.0183)
+Ratio: 0.082 (0.0265)
+
+Heritability of phenotype 2/2
+-----------------------------
+Total Observed scale h2: 0.0669 (0.0055)
+Lambda GC: 1.5108
+Mean Chi^2: 1.8605
+Intercept: 1.0673 (0.0211)
+Ratio: 0.0782 (0.0246)
+
+Genetic Covariance
+------------------
+Total Observed scale gencov: 0.0699 (0.006)
+Mean z1*z2: 1.5912
+Intercept: 0.8997 (0.019)
+
+Genetic Correlation
+-------------------
+Genetic Correlation: 0.971 (0.0037)
+Z-score: 260.3238
+P: 0.
+
+
+Summary of Genetic Correlation Results
+p1                                      p2     rg      se         z    p  h2_obs  h2_obs_se  h2_int  h2_int_se  gcov_int  gcov_int_se
+results/ldsc/BCAA.UKBB_EUR.sumstats.gz  results/ldsc/BCAA.meta_EUR.sumstats.gz  0.971  0.0037  260.3238  0.0  0.0669     0.0055  1.0673     0.0211    0.8997        0.019
+
+Analysis finished at Sun Jul 26 05:09:06 2026
+Total time elapsed: 10.81s

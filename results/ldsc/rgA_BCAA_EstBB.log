@@ -1,0 +1,92 @@
+*********************************************************************
+* LD Score Regression (LDSC)
+* Version 1.0.1
+* (C) 2014-2019 Brendan Bulik-Sullivan and Hilary Finucane
+* Broad Institute of MIT and Harvard / MIT Department of Mathematics
+* GNU General Public License v3
+*********************************************************************
+Call: 
+./ldsc.py \
+--ref-ld-chr data/ref/eur_w_ld_chr/ \
+--out results/ldsc/rgA_BCAA_EstBB \
+--rg results/ldsc/BCAA.EstBB.sumstats.gz,results/ldsc/BCAA.UKBB_EUR.sumstats.gz,results/ldsc/BCAA.meta_EUR.sumstats.gz \
+--w-ld-chr data/ref/eur_w_ld_chr/ 
+
+Beginning analysis at Sun Jul 26 05:08:38 2026
+Reading summary statistics from results/ldsc/BCAA.EstBB.sumstats.gz ...
+Read summary statistics for 1151181 SNPs.
+Reading reference panel LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read reference panel LD Scores for 1290028 SNPs.
+Removing partitioned LD Scores with zero variance.
+Reading regression weight LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read regression weight LD Scores for 1290028 SNPs.
+After merging with reference panel LD, 1144282 SNPs remain.
+After merging with regression SNP LD, 1144282 SNPs remain.
+Computing rg for phenotype 2/3
+Reading summary statistics from results/ldsc/BCAA.UKBB_EUR.sumstats.gz ...
+Read summary statistics for 1217311 SNPs.
+After merging with summary statistics, 1144282 SNPs remain.
+1137154 SNPs with valid alleles.
+
+Heritability of phenotype 1
+---------------------------
+Total Observed scale h2: 0.0627 (0.0062)
+Lambda GC: 1.194
+Mean Chi^2: 1.2594
+Intercept: 1.0293 (0.0105)
+Ratio: 0.1128 (0.0405)
+
+Heritability of phenotype 2/3
+-----------------------------
+Total Observed scale h2: 0.077 (0.0066)
+Lambda GC: 1.4245
+Mean Chi^2: 1.7014
+Intercept: 1.0596 (0.0214)
+Ratio: 0.085 (0.0305)
+
+Genetic Covariance
+------------------
+Total Observed scale gencov: 0.0579 (0.0055)
+Mean z1*z2: 0.3429
+Intercept: 0.0218 (0.0118)
+
+Genetic Correlation
+-------------------
+Genetic Correlation: 0.8332 (0.0287)
+Z-score: 28.9917
+P: 8.3614e-185
+
+Computing rg for phenotype 3/3
+Reading summary statistics from results/ldsc/BCAA.meta_EUR.sumstats.gz ...
+Read summary statistics for 1217311 SNPs.
+After merging with summary statistics, 1144282 SNPs remain.
+1139838 SNPs with valid alleles.
+
+Heritability of phenotype 3/3
+-----------------------------
+Total Observed scale h2: 0.066 (0.0054)
+Lambda GC: 1.5181
+Mean Chi^2: 1.8742
+Intercept: 1.0763 (0.0259)
+Ratio: 0.0872 (0.0296)
+
+Genetic Covariance
+------------------
+Total Observed scale gencov: 0.059 (0.0053)
+Mean z1*z2: 0.9818
+Intercept: 0.5892 (0.0139)
+
+Genetic Correlation
+-------------------
+Genetic Correlation: 0.918 (0.0153)
+Z-score: 60.1022
+P: 0.
+
+
+Summary of Genetic Correlation Results
+p1                                      p2      rg      se        z            p  h2_obs  h2_obs_se  h2_int  h2_int_se  gcov_int  gcov_int_se
+results/ldsc/BCAA.EstBB.sumstats.gz  results/ldsc/BCAA.UKBB_EUR.sumstats.gz  0.8332  0.0287  28.9917  8.3614e-185   0.077     0.0066  1.0596     0.0214    0.0218       0.0118
+results/ldsc/BCAA.EstBB.sumstats.gz  results/ldsc/BCAA.meta_EUR.sumstats.gz  0.9180  0.0153  60.1022   0.0000e+00   0.066     0.0054  1.0763     0.0259    0.5892       0.0139
+
+Analysis finished at Sun Jul 26 05:08:53 2026
+Total time elapsed: 15.2s

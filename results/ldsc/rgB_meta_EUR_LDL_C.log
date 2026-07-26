@@ -1,0 +1,65 @@
+*********************************************************************
+* LD Score Regression (LDSC)
+* Version 1.0.1
+* (C) 2014-2019 Brendan Bulik-Sullivan and Hilary Finucane
+* Broad Institute of MIT and Harvard / MIT Department of Mathematics
+* GNU General Public License v3
+*********************************************************************
+Call: 
+./ldsc.py \
+--ref-ld-chr data/ref/eur_w_ld_chr/ \
+--out results/ldsc/rgB_meta_EUR_LDL_C \
+--rg results/ldsc/LDL_C.meta_EUR.sumstats.gz,results/ldsc/Glucose.meta_EUR.sumstats.gz \
+--w-ld-chr data/ref/eur_w_ld_chr/ 
+
+Beginning analysis at Sun Jul 26 05:13:04 2026
+Reading summary statistics from results/ldsc/LDL_C.meta_EUR.sumstats.gz ...
+Read summary statistics for 1180091 SNPs.
+Reading reference panel LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read reference panel LD Scores for 1290028 SNPs.
+Removing partitioned LD Scores with zero variance.
+Reading regression weight LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read regression weight LD Scores for 1290028 SNPs.
+After merging with reference panel LD, 1173428 SNPs remain.
+After merging with regression SNP LD, 1173428 SNPs remain.
+Computing rg for phenotype 2/2
+Reading summary statistics from results/ldsc/Glucose.meta_EUR.sumstats.gz ...
+Read summary statistics for 1217311 SNPs.
+After merging with summary statistics, 1173428 SNPs remain.
+1173428 SNPs with valid alleles.
+
+Heritability of phenotype 1
+---------------------------
+Total Observed scale h2: 0.0819 (0.025)
+Lambda GC: 1.4998
+Mean Chi^2: 2.4634
+Intercept: 1.4249 (0.3021)
+Ratio: 0.2903 (0.2064)
+
+Heritability of phenotype 2/2
+-----------------------------
+Total Observed scale h2: 0.0503 (0.0063)
+Lambda GC: 1.3859
+Mean Chi^2: 1.6633
+Intercept: 1.0814 (0.0254)
+Ratio: 0.1227 (0.0383)
+
+Genetic Covariance
+------------------
+Total Observed scale gencov: 0.0077 (0.0022)
+Mean z1*z2: 0.129
+Intercept: 0.0298 (0.0093)
+
+Genetic Correlation
+-------------------
+Genetic Correlation: 0.1195 (0.0416)
+Z-score: 2.876
+P: 0.004
+
+
+Summary of Genetic Correlation Results
+p1                                         p2      rg      se      z      p  h2_obs  h2_obs_se  h2_int  h2_int_se  gcov_int  gcov_int_se
+results/ldsc/LDL_C.meta_EUR.sumstats.gz  results/ldsc/Glucose.meta_EUR.sumstats.gz  0.1195  0.0416  2.876  0.004  0.0503     0.0063  1.0814     0.0254    0.0298       0.0093
+
+Analysis finished at Sun Jul 26 05:13:15 2026
+Total time elapsed: 10.81s

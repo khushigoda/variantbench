@@ -1,0 +1,92 @@
+*********************************************************************
+* LD Score Regression (LDSC)
+* Version 1.0.1
+* (C) 2014-2019 Brendan Bulik-Sullivan and Hilary Finucane
+* Broad Institute of MIT and Harvard / MIT Department of Mathematics
+* GNU General Public License v3
+*********************************************************************
+Call: 
+./ldsc.py \
+--ref-ld-chr data/ref/eur_w_ld_chr/ \
+--out results/ldsc/rgB_meta_EUR_Lactate \
+--rg results/ldsc/Lactate.meta_EUR.sumstats.gz,results/ldsc/LDL_C.meta_EUR.sumstats.gz,results/ldsc/Glucose.meta_EUR.sumstats.gz \
+--w-ld-chr data/ref/eur_w_ld_chr/ 
+
+Beginning analysis at Sun Jul 26 05:12:46 2026
+Reading summary statistics from results/ldsc/Lactate.meta_EUR.sumstats.gz ...
+Read summary statistics for 1180091 SNPs.
+Reading reference panel LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read reference panel LD Scores for 1290028 SNPs.
+Removing partitioned LD Scores with zero variance.
+Reading regression weight LD Score from data/ref/eur_w_ld_chr/[1-22] ... (ldscore_fromlist)
+Read regression weight LD Scores for 1290028 SNPs.
+After merging with reference panel LD, 1173428 SNPs remain.
+After merging with regression SNP LD, 1173428 SNPs remain.
+Computing rg for phenotype 2/3
+Reading summary statistics from results/ldsc/LDL_C.meta_EUR.sumstats.gz ...
+Read summary statistics for 1217311 SNPs.
+After merging with summary statistics, 1173428 SNPs remain.
+1173428 SNPs with valid alleles.
+
+Heritability of phenotype 1
+---------------------------
+Total Observed scale h2: 0.0378 (0.0029)
+Lambda GC: 1.3477
+Mean Chi^2: 1.5346
+Intercept: 1.089 (0.0242)
+Ratio: 0.1665 (0.0452)
+
+Heritability of phenotype 2/3
+-----------------------------
+Total Observed scale h2: 0.0819 (0.025)
+Lambda GC: 1.4998
+Mean Chi^2: 2.4634
+Intercept: 1.4249 (0.3021)
+Ratio: 0.2903 (0.2064)
+
+Genetic Covariance
+------------------
+Total Observed scale gencov: 0.0032 (0.0023)
+Mean z1*z2: 0.1224
+Intercept: 0.0885 (0.0142)
+
+Genetic Correlation
+-------------------
+Genetic Correlation: 0.0567 (0.0429)
+Z-score: 1.3209
+P: 0.1865
+
+Computing rg for phenotype 3/3
+Reading summary statistics from results/ldsc/Glucose.meta_EUR.sumstats.gz ...
+Read summary statistics for 1217311 SNPs.
+After merging with summary statistics, 1173428 SNPs remain.
+1173428 SNPs with valid alleles.
+
+Heritability of phenotype 3/3
+-----------------------------
+Total Observed scale h2: 0.0503 (0.0063)
+Lambda GC: 1.3859
+Mean Chi^2: 1.6633
+Intercept: 1.0814 (0.0254)
+Ratio: 0.1227 (0.0383)
+
+Genetic Covariance
+------------------
+Total Observed scale gencov: -0.009 (0.002)
+Mean z1*z2: -0.5111
+Intercept: -0.4087 (0.0197)
+
+Genetic Correlation
+-------------------
+Genetic Correlation: -0.2066 (0.0412)
+Z-score: -5.0116
+P: 5.3988e-07
+
+
+Summary of Genetic Correlation Results
+p1                                         p2      rg      se       z           p  h2_obs  h2_obs_se  h2_int  h2_int_se  gcov_int  gcov_int_se
+results/ldsc/Lactate.meta_EUR.sumstats.gz    results/ldsc/LDL_C.meta_EUR.sumstats.gz  0.0567  0.0429  1.3209  1.8653e-01  0.0819     0.0250  1.4249     0.3021    0.0885       0.0142
+results/ldsc/Lactate.meta_EUR.sumstats.gz  results/ldsc/Glucose.meta_EUR.sumstats.gz -0.2066  0.0412 -5.0116  5.3988e-07  0.0503     0.0063  1.0814     0.0254   -0.4087       0.0197
+
+Analysis finished at Sun Jul 26 05:13:02 2026
+Total time elapsed: 15.67s
