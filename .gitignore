@@ -20,3 +20,4 @@ results/**/*.bed
 report/*_files/
 .tmp/
 __pycache__/
+results/finemap/*.susie.rds
