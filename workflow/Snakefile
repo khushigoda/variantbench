@@ -155,7 +155,11 @@ rule all:
         expand("results/mr/{metab}.{outcome}.gwmr.tsv",   metab=MR_METABOLITES, outcome=MR_OUTCOMES),
         expand("results/mr/{metab}.{outcome}.scatter.png", metab=MR_METABOLITES, outcome=MR_OUTCOMES),
         expand("results/mr/{metab}.{outcome}.cismr.tsv",  metab=MR_METABOLITES, outcome=MR_OUTCOMES),
-        expand("results/mr/{metab}.{outcome}.cismr.png",  metab=MR_METABOLITES, outcome=MR_OUTCOMES)
+        expand("results/mr/{metab}.{outcome}.cismr.png",  metab=MR_METABOLITES, outcome=MR_OUTCOMES),
+        # Step 8 report — the terminal target: knits every table + plot above into
+        # one self-contained HTML. Listing it here makes a bare `snakemake` build the
+        # whole pipeline top-to-bottom and finish on the readable report.
+        "report/report.html"
 
 # =========================================================
 # Step 1 — meta-analysis (EstBB + UKBB_EUR -> meta), reads RAW files directly
@@ -411,9 +415,11 @@ rule finemap_plots:
         rscript="workflow/scripts/04e_finemap_plots.R"
     output:
         summary="results/finemap/{metabolite}.finemap_summary.png",       # per-locus QC
-        consequence="results/finemap/{metabolite}.consequence_summary.png" # coding-vs-regulatory
-        # also writes plots/{trait}.{gene}.regional.png (per locus) and
-        # {trait}.missense_table.png — not declared DAG outputs (count varies with loci)
+        consequence="results/finemap/{metabolite}.consequence_summary.png", # coding-vs-regulatory
+        # per-locus regional plots go to results/finemap/plots/{trait}.{gene}.regional.png
+        # (count varies with #loci, so declared as a directory output — same pattern as
+        # coloc_plots; this makes `results/finemap/plots` a real DAG node the report needs)
+        plotdir=directory("results/finemap/plots")
     conda:  config["envs"]["r"]
     shell:
         "TRAIT={wildcards.metabolite} "
