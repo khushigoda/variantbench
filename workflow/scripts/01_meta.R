@@ -24,7 +24,7 @@
 #   input$val_dir  : dir of per-chr published meta_EUR split files (validation)
 #   output$meta    : results/meta/<metab>.meta.tsv.gz      (GENOME-WIDE)
 #   output$plot    : results/meta/<metab>.concordance.png  (EstBB beta vs UKBB beta)
-#   output$valplot : results/meta/<metab>.validation.png   (our beta vs published)
+#   output$valplot : results/meta/<metab>.validation.png   (meta_rep vs meta_og beta)
 #   output$valtsv  : results/meta/<metab>.validation.tsv   (r, slope, n, counts)
 suppressMessages({library(data.table); library(ggplot2)})
 set.seed(snakemake@params$seed)   # reproducibility: global seed from config
@@ -188,19 +188,14 @@ conc <- rbindlist(conc_smp); vsc <- rbindlist(val_smp)
 p1 <- ggplot(conc, aes(beta_e, beta_u)) +
   geom_point(alpha = .2, size = .5) +
   geom_abline(slope = 1, intercept = 0, colour = "red") + theme_bw() +
-  labs(title = paste(metab, "cohort concordance (sampled)"),
-       subtitle = sprintf("shared %s / %s total variants",
-                          format(tot["n_both"], big.mark = ","),
-                          format(tot["n_total"], big.mark = ",")),
+  labs(title = metab,
        x = "EstBB beta", y = "UKBB_EUR beta")
 ggsave(snakemake@output$plot, p1, width = 5, height = 5, dpi = 120)
 p2 <- ggplot(vsc, aes(beta, beta_pub)) +
   geom_point(alpha = .2, size = .5) +
   geom_abline(slope = 1, intercept = 0, colour = "red") + theme_bw() +
-  labs(title = paste(metab, "vs published meta_EUR (sampled)"),
-       subtitle = sprintf("Pearson r = %.4f  (n = %s matched)",
-                          r, format(as.integer(n), big.mark = ",")),
-       x = "our beta_meta", y = "published meta_EUR beta")
+  labs(title = metab,
+       x = "meta_rep beta", y = "meta_og beta")
 ggsave(snakemake@output$valplot, p2, width = 5, height = 5, dpi = 120)
 cat(sprintf("%s: GENOME-WIDE meta %s variants; validation r=%.4f slope=%.3f on %s shared\n",
             metab, format(tot["n_total"], big.mark = ","), r, sl,

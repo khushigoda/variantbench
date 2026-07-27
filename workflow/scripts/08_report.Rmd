@@ -170,27 +170,34 @@ desired number of traits, and the restriction here is purely one of available re
 same reason, some **tools and methodological choices deliberately diverge from the published
 study** where a lighter or more self-contained alternative fit the resource envelope (these
 substitutions are flagged in the affected sections). All work runs on a single workstation-class
-machine (**8-core CPU, 8 GiB RAM, no GPU**); memory in particular drives several of these choices —
-e.g. reading precomputed per-step summary tables in this report instead of loading the multi-GB
-genome-wide files, and using SuSiE fine-mapping with a public LD panel rather than an
-individual-level genotype workflow.
+machine (**8-core CPU, 8 GiB RAM, no GPU**); memory in particular drives several of these choices.
 
 **The LD reference is out-of-sample.** Fine-mapping, clumping, and MR instrument pruning use a
 1000 Genomes EUR panel, **not** the in-sample UKBB LD the reference paper used. Out-of-sample LD
 can miscalibrate SuSiE credible sets and mis-prune instruments; this is an accepted tractability
-tradeoff, flagged here and again in each affected section. The CAD outcome (`GCST90132314`) is the
-GWAS Catalog harmonised (GRCh38) release, matching the GRCh38 metabolite exposures, so no liftover
-is required. A T2D GWAS (DIAGRAM, GRCh37) was prepared and lifted to GRCh38 in Step 0, but is
-**ultimately not used**: with LDL_C selected as the metabolite of interest, **CAD is the
+tradeoff, flagged here and again in each affected section. With LDL_C selected as the metabolite of interest, **CAD is the
 appropriate disease outcome** for the downstream colocalization and MR, so T2D is left out of the
 reported arc.
 
 # Meta-analysis (Step 1)
 
-*Inverse-variance fixed-effect meta-analysis of EstBB + UKBB (EUR), genome-wide (every union
-variant kept, not HapMap3-restricted). Validation: my meta effect sizes are regressed against
-the authors' published meta-analysis — the OLS slope and Pearson r should both be ≈1 if the
-allele harmonization and inverse-variance weighting are correct.*
+This step combines the two European cohorts — EstBB and UKBB_EUR — into a single genome-wide
+association table for each metabolite using **inverse-variance-weighted, fixed-effect
+meta-analysis**. The main steps are: each cohort's summary statistics are matched variant by
+variant on chromosome, position, and both alleles (a **no-flip join**, so only identically
+oriented effect alleles are combined and any strand or allele mismatch is left uncombined rather
+than silently mis-merged); every variant is weighted by the inverse of its squared standard error,
+so more precisely estimated cohorts contribute more; the pooled effect is the weighted mean of the
+per-cohort betas, with a pooled standard error of √(1/Σw); and effect-allele frequency and sample
+size are carried through, with a signed *z*-statistic, two-sided *p*-value, and a Cochran's-*Q*
+heterogeneity test computed per variant. Crucially, **every union variant is kept** — the table is
+not restricted to a HapMap3 or well-imputed subset — because the downstream steps (lead-variant
+definition, fine-mapping, MR) need the full genome-wide signal. The whole meta is run
+**one chromosome at a time and written incrementally**, so the full ~100M-variant table is produced
+without ever holding more than a single chromosome in memory — the design choice that lets a
+genome-wide meta run on an 8 GiB machine. Finally, the result is **validated against the authors'
+published `meta_EUR`**: our pooled betas are regressed on theirs, and the OLS slope and Pearson *r*
+should both sit at ≈1 if the allele harmonization and inverse-variance weighting are correct.
 
 ```{r meta-validation}
 # Headline Step-1 result. Driven by the small precomputed `*.validation.tsv` (r, slope, variant
@@ -210,20 +217,20 @@ show_table(if (exists("val_show")) val_show else NULL,
            "Validation vs published meta_EUR: agreement (Pearson r, OLS slope) and cohort overlap")
 ```
 
-The validation table is the decisive check on the whole meta step: `pearson_r` and `slope` at
-machine precision to 1 mean the from-scratch inverse-variance meta reproduces the authors'
-published meta exactly, over all union variants. The overlap columns (`n_both`,
-`n_estbb_only`, `n_ukbb_only`) show that the meta genuinely combined both cohorts rather than
-defaulting to whichever one was present. This validates that the pre-processing of GWAS summary
-statistics downloaded was accurate and the dataset for subsequent downstream analysis was ready.
+The table reads out that validation. `pearson_r` and `slope` sit at machine precision to 1, meaning
+the pooled effect sizes reproduce the authors' published meta exactly across all union variants,
+while the overlap columns (`n_both`, `n_estbb_only`, `n_ukbb_only`) confirm the meta genuinely
+combined both cohorts rather than defaulting to whichever one was present. Together these confirm
+that the summary-statistic pre-processing was accurate and the genome-wide table is ready for the
+downstream steps.
 
 ```{r meta-fig, results='asis'}
 # Two 2x2 composites (one image each) instead of 8 stacked plots.
-# Validation (our beta vs published meta_EUR) is the headline reproducibility check;
+# Validation (meta_rep vs meta_og) is the headline reproducibility check;
 # concordance (EstBB vs UKBB per-cohort beta) is the supporting cross-cohort view.
-cat("**Validation — our meta vs the authors' published `meta_EUR` (per metabolite):**\n\n")
+cat("**Validation — reproduced meta (`meta_rep`) against the original published meta (`meta_og`), per metabolite:**\n\n")
 compose_figs(sm@input$validation)
-cat("**Cross-cohort concordance — EstBB vs UKBB effect sizes (per metabolite):**\n\n")
+cat("**Cross-cohort concordance — EstBB vs UKBB effect sizes, per metabolite:**\n\n")
 compose_figs(sm@input$concordance)
 ```
 
