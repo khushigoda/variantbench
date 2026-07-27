@@ -328,10 +328,21 @@ show_figs(c(sm@input$finemap_summary, sm@input$consequence_summary), cols = 1)
 ```
 
 ```{r finemap-regional-fig, results='asis'}
-# Per-locus LocusZoom-style regional plots (GWAS -log10P coloured by r2-to-lead over a PIP track).
-regional_pngs <- unlist(lapply(sm@input$finemap_plots,
-                               function(d) list.files(d, "\\.png$", full.names = TRUE)))
-show_figs(regional_pngs)
+# LocusZoom-style regional plots (GWAS -log10P coloured by r2-to-lead over a PIP track).
+# We FEATURE three loci that each make a distinct point rather than showing all 11 — the
+# two summary figures above already give the all-loci view, and 11 near-identical panels
+# add scroll without insight:
+#   PCSK9   - the R46L drug-target missense variant recovered at high PIP (headline result)
+#   ABCG5_8 - two fine-mapped missense variants across a two-gene locus (coding + naming nuance)
+#   APOE    - the canonical lipid locus with multiple credible sets (allelic heterogeneity)
+featured <- c("PCSK9", "ABCG5_8", "APOE")
+plotdir  <- sm@input$finemap_plots[1]
+regional_pngs <- file.path(plotdir, sprintf("%s.%s.regional.png", "LDL_C", featured))
+cat("*Three representative loci (of 11 fine-mapped). PCSK9 shows the R46L drug-target coding",
+    "variant at high PIP; ABCG5/ABCG8 shows two missense variants across a two-gene locus;",
+    "APOE shows a locus resolved into multiple credible sets. The remaining loci are summarised",
+    "in the two figures above and available in the repository.*\n\n")
+show_figs(regional_pngs, cols = 1)
 ```
 
 ## MCQ — Fine-mapping
