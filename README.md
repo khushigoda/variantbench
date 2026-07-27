@@ -7,6 +7,12 @@ EUR-matched outcomes, 1000G EUR LD). Exposures are published GWAS summary statis
 individual-level data. The four traits form a causal-prior gradient — LDL_C, BCAA, and
 glucose as drug-target-validated positive controls, lactate as the weak-prior contrast.
 
+## Analysis report
+
+**[Full analysis report (HTML)](docs/report.html)** — Plots, tables, fine-mapping credible sets, colocalization results, MR estimates, and MCQ for all steps.
+
+**[Methods summary (ANALYSIS.md)](ANALYSIS.md)** — Scope, exposures, outcomes, and methodological choices (concise overview).
+
 ## Layout
 ```
 config/config.yaml        all parameters, accessions, paths  (edit here, not the code)

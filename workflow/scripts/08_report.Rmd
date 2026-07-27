@@ -12,6 +12,13 @@ output:
     number_sections: true
 ---
 
+---
+
+> **GitHub Repository:** https://github.com/khushigoda/variantbench  
+> **Analysis Methods:** [ANALYSIS.md](../ANALYSIS.md)
+
+---
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.align = "center")
 library(data.table); library(ggplot2); library(DT)
