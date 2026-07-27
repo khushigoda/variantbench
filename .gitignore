@@ -36,3 +36,4 @@ report/report_*check*.html
 report/_report_inputs.json
 report/report.html
 workflow/scripts/00_normalize.R
+workflow/scripts/04_finemap.R
