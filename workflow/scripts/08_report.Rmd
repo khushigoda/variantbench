@@ -14,6 +14,7 @@ output:
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, fig.align = "center")
 library(data.table); library(ggplot2); library(DT)
+library(cowplot); library(png)   # compose_figs(): tile per-trait PNGs into one image
 sm <- snakemake   # S4 object; inputs wired by the `report` rule in the Snakefile
 set.seed(sm@params$seed)   # reproducibility: global seed from config
 
@@ -67,6 +68,26 @@ show_figs <- function(paths, cols = NULL) {
                   knitr::image_uri(p), basename(p)))
     cat('</div>\n\n')
   }
+  invisible(NULL)
+}
+
+# Tile several PNGs into ONE composite image (cowplot) and inline it base64.
+# Used for the Step-1 per-trait scatter families (4 validation, 4 concordance):
+# one 2x2 image reads far better than 8 separate full-width plots and cuts weight.
+# Each source PNG already carries its own trait title, so no cowplot labels.
+compose_figs <- function(paths, ncol = 2, panel_in = 4.5) {
+  paths <- paths[file.exists(paths) & file.info(paths)$size > 0]
+  if (!length(paths)) return(invisible(NULL))
+  if (length(paths) == 1) return(show_figs(paths))
+  grobs <- lapply(paths, function(p)
+    ggdraw() + draw_grob(rasterGrob(readPNG(p), interpolate = TRUE)))
+  g <- plot_grid(plotlist = grobs, ncol = ncol)
+  nrow <- ceiling(length(paths) / ncol)
+  tmp <- tempfile(fileext = ".png")
+  ggsave(tmp, g, width = panel_in * ncol, height = panel_in * nrow,
+         dpi = 150, device = grDevices::png, type = "cairo", bg = "white")
+  cat(sprintf('<img src="%s" style="max-width:100%%;display:block;margin:0.5em auto;" alt="composite"/>\n\n',
+              knitr::image_uri(tmp)))
   invisible(NULL)
 }
 ```
@@ -155,9 +176,13 @@ Step 3, where LD-clumping collapses correlated hits into independent lead varian
 p < 5e-8 variant count over 100M+ variants over-counts single signals through LD.)*
 
 ```{r meta-fig, results='asis'}
-# validation.png (our beta vs published beta) is the headline; concordance.png (EstBB vs UKBB
-# per-cohort beta agreement) is the supporting cross-cohort view.
-show_figs(c(sm@input$validation, sm@input$concordance))
+# Two 2x2 composites (one image each) instead of 8 stacked plots.
+# Validation (our beta vs published meta_EUR) is the headline reproducibility check;
+# concordance (EstBB vs UKBB per-cohort beta) is the supporting cross-cohort view.
+cat("**Validation — our meta vs the authors' published `meta_EUR` (per trait):**\n\n")
+compose_figs(sm@input$validation)
+cat("**Cross-cohort concordance — EstBB vs UKBB effect sizes (per trait):**\n\n")
+compose_figs(sm@input$concordance)
 ```
 
 ## MCQ — Meta-analysis
