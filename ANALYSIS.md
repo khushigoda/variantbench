@@ -1,6 +1,6 @@
 # VariantBench — Methods
 
-*Analysis pipeline executing steps 0–8: meta-analysis, heritability, fine-mapping, colocalization, and MR. Scope locked 2026-07-24.*
+*iAnalysis pipeline executing steps 0–8: meta-analysis, heritability, fine-mapping, colocalization, and MR. Scope locked 2026-07-24. Final analysis may vary*
 
 ---
 
@@ -24,21 +24,7 @@ chromosomes** and **four different pathways** (lipid, amino-acid catabolism, gly
 glycolysis), spanning strong-and-RCT-validated (LDL_C) → strong (BCAA, Glucose) → weak
 (Lactate) causal priors. Recovering the three controls *and* correctly down-weighting the
 contrast is what demonstrates discrimination; a single exposure can't show it, and
-near-duplicate traits would only re-test the same locus.
-
-### Locked accessions (GWAS Catalog, GRCh38 — EUR cohorts only)
-
-| Trait | EstBB | UKBB (EUR) | Published meta (validation) |
-|---|---|---|---|
-| LDL_C      | `GCST90449408` | `GCST90449657` | `GCST90451151` |
-| Total BCAA | `GCST90449544` | `GCST90449793` | `GCST90451287` |
-| Glucose    | `GCST90449379` | `GCST90449628` | `GCST90451122` |
-| Lactate    | `GCST90449404` | `GCST90449653` | `GCST90451147` |
-
-All from Supplementary Table S12. The 6 non-EUR UKBB ancestries (AFR/AMR/CSA/EAS/MID) and the
-all-ancestry meta are **deliberately not used** — the analysis is EUR-only. The **published
-meta** column is not an input; it is the target I validate my own Step-1 meta-analysis against
-(beta-vs-beta correlation should be ≈1). LDL_C is the S12 trait "LDL cholesterol", *not* the
+near-duplicate traits would only re-test the same locus. LDL_C is the S12 trait "LDL cholesterol", *not* the
 separate "Clinical LDL cholesterol".
 
 ---
@@ -47,8 +33,8 @@ separate "Clinical LDL cholesterol".
 
 | Outcome | Source | Type | Role |
 |---|---|---|---|
-| **CAD** (coronary artery disease) | GWAS Catalog `GCST90132314` (EUR-only, primary) + `GCST90132315` (multi-ancestry, sensitivity), harmonised GRCh38 | case/control | **Primary** outcome for LDL_C — the RCT-proven relationship. Cardiovascular comparator for the other traits. |
-| **T2D** (type-2 diabetes) | Suzuki et al. 2024 (DIAGRAM), EUR (primary) + all-ancestry (sensitivity) | case/control | **Primary** outcome for BCAA and Glucose — the diabetes-linked exposures. |
+| **CAD** (coronary artery disease) | GWAS Catalog `GCST90132314` (EUR-only), harmonised GRCh38 | case/control | **Primary** outcome for LDL_C — the RCT-proven relationship. Cardiovascular comparator for the other traits. |
+| **T2D** (type-2 diabetes) | Suzuki et al. 2024 (DIAGRAM), EUR | case/control | **Primary** outcome for BCAA and Glucose — the diabetes-linked exposures. |
 
 **Why CAD/T2D:** these two cardiometabolic endpoints map cleanly onto the four exposures
 (LDL_C→CAD; BCAA/Glucose→T2D; Lactate weakly to both), both have large well-powered
@@ -56,22 +42,10 @@ separate "Clinical LDL cholesterol".
 interpretable **log-odds-ratio per SD of exposure**. Keeping the outcomes European matches the
 EUR exposures and avoids ancestry-mismatch bias in two-sample MR.
 
-**Deliberate choice on the CAD accession — documented, not accidental:** the paper's Methods
-cite the multi-ancestry study `GCST90132315`, but the authors' *released code* actually reads
-the **European-only** `GCST90132314` (their `Aragam_2022_GCST90132314_harmonized.parquet`) —
-a paper-vs-code discrepancy I verified against their GitHub repo. I pull **both**: I use the
-EUR-only `GCST90132314` as the **primary** outcome (ancestry-matched to my European exposure,
-keeping LD structure and allele frequencies consistent — ancestry mismatch is a known source
-of bias in two-sample MR and LDSC), and keep the multi-ancestry `GCST90132315` as a
-**sensitivity check** (more cases, larger power). The tradeoff is stated in the report's
-limitations.
-
 **Genome build / liftover:** I download the GWAS Catalog **harmonised** CAD files, which are
 already lifted to GRCh38 (`genome_assembly: GRCh38` in the file metadata), matching my GRCh38
 metabolite exposures — so **CAD needs no liftover**. T2D is different: DIAGRAM serves the
-Suzuki 2024 sumstats in **GRCh37/hg19 only**, so T2D **still requires a GRCh37→GRCh38 liftover**
-in Step 0 before MR harmonisation. This asymmetry is intentional and handled by the per-outcome
-`build:` field in the config (Step 0 lifts only when `build == GRCh37`).
+Suzuki 2024 sumstats in **GRCh37/hg19 only**, so T2D **still requires a GRCh37→GRCh38 liftover**.
 
 ---
 
@@ -130,4 +104,4 @@ notebook.
 
 ## 7. Rendered report
 
-Complete analysis (plots, tables, MCQ): **[report.html](docs/report.html)**
+Complete analysis (plots, tables, MCQ)
