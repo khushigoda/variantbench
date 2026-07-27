@@ -558,7 +558,10 @@ show_figs(c(sm@input$finemap_summary, sm@input$consequence_summary), cols = 1)
 #   APOE    - the canonical lipid locus with multiple credible sets (allelic heterogeneity)
 featured <- c("PCSK9", "ABCG5_8", "APOE")
 plotdir  <- sm@input$finemap_plots[1]
-regional_pngs <- file.path(plotdir, sprintf("%s.%s.regional.png", "LDL_C", featured))
+# Use WebP if available (60-70% smaller); fall back to PNG
+regional_webp <- file.path(plotdir, sprintf("%s.%s.regional.webp", "LDL_C", featured))
+regional_png <- file.path(plotdir, sprintf("%s.%s.regional.png", "LDL_C", featured))
+regional_pngs <- ifelse(file.exists(regional_webp), regional_webp, regional_png)
 cat("Three representative loci are featured here, of the 11 fine-mapped. PCSK9 shows the R46L",
     "drug-target coding variant recovered at high PIP; ABCG5/ABCG8 shows two missense variants",
     "across a two-gene locus; and APOE shows a locus resolved into multiple credible sets",

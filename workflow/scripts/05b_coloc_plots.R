@@ -149,6 +149,12 @@ regional_one <- function(sym) {
   fn <- file.path(PLOTDIR, sprintf("%s.%s.regional.png", TRAIT, sym))
   ggsave(fn, g_stack, width = 5.6, height = 4.6, dpi = 150,
          device = grDevices::png, type = "cairo", bg = "white")
+  # Convert to WebP (60-70% smaller)
+  if (nzchar(Sys.which("cwebp"))) {
+    webp_fn <- sub("\\.png$", ".webp", fn)
+    system(sprintf("cwebp -q 85 '%s' -o '%s' 2>/dev/null && rm '%s'", fn, webp_fn, fn))
+    fn <- webp_fn
+  }
   cat(sprintf("   %-8s GWAS-lead %s@%d  QTL-peak@%d  d=%.1fkb  -> %s\n",
               sym, gl$SNP, gl$pos, ql$position, abs(gl$pos-ql$position)/1e3, basename(fn)))
   fn
@@ -191,6 +197,12 @@ pOv <- ggplot(m, aes(pp, label, colour = hyp)) +
 ov_fn <- file.path(OUTDIR, sprintf("%s.coloc_overview.png", TRAIT))
 ggsave(ov_fn, pOv, width = 6.4, height = 4.6, dpi = 150,
        device = grDevices::png, type = "cairo", bg = "white")
+# Convert to WebP (60-70% smaller)
+if (nzchar(Sys.which("cwebp"))) {
+  webp_fn <- sub("\\.png$", ".webp", ov_fn)
+  system(sprintf("cwebp -q 85 '%s' -o '%s' 2>/dev/null && rm '%s'", ov_fn, webp_fn, ov_fn))
+  ov_fn <- webp_fn
+}
 cat(sprintf("-- overview -> %s (%d genes, %d coloc)\n",
             basename(ov_fn), nrow(best), sum(best$coloc)))
 cat("[done] 05b coloc plots\n")

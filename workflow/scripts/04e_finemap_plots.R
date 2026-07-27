@@ -100,14 +100,20 @@ regional_one <- function(g) {
   # 1300x975 @130dpi via cairo: still sharper than the ~900px the HTML displays,
   # flattens RGBA->RGB and compresses better -> ~3-4x smaller than the old
   # 2000x1500 RGBA (regional plots were 79% of the report's figure weight).
-  png(file.path(PLOTDIR, sprintf("%s.%s.regional.png", TRAIT, g)),
-      width = 1300, height = 975, res = 130, type = "cairo", bg = "white")
+  png_file <- file.path(PLOTDIR, sprintf("%s.%s.regional.png", TRAIT, g))
+  webp_file <- sub("\\.png$", ".webp", png_file)
+  png(png_file, width = 1300, height = 975, res = 130, type = "cairo", bg = "white")
   grid::grid.newpage()
   grid::pushViewport(grid::viewport(layout = grid::grid.layout(2, 1, heights = c(1.15, 1))))
   print(top, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 1))
   print(bot, vp = grid::viewport(layout.pos.row = 2, layout.pos.col = 1))
   grid::popViewport()
   dev.off()
+  # Convert PNG to WebP (60-70% smaller, same quality)
+  if (nzchar(Sys.which("cwebp"))) {
+    system(sprintf("cwebp -q 85 '%s' -o '%s' 2>/dev/null && rm '%s'",
+                   png_file, webp_file, png_file))
+  }
   invisible(TRUE)
 }
 for (g in genes) regional_one(g)

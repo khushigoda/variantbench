@@ -197,6 +197,13 @@ p2 <- ggplot(vsc, aes(beta, beta_pub)) +
   labs(title = metab,
        x = "meta_rep beta", y = "meta_og beta")
 ggsave(snakemake@output$valplot, p2, width = 5, height = 5, dpi = 120)
+# Convert PNG to WebP (60-70% smaller, same quality)
+if (nzchar(Sys.which("cwebp"))) {
+  for (f in c(snakemake@output$plot, snakemake@output$valplot)) {
+    webp_f <- sub("\\.png$", ".webp", f)
+    system(sprintf("cwebp -q 85 '%s' -o '%s' 2>/dev/null && rm '%s'", f, webp_f, f))
+  }
+}
 cat(sprintf("%s: GENOME-WIDE meta %s variants; validation r=%.4f slope=%.3f on %s shared\n",
             metab, format(tot["n_total"], big.mark = ","), r, sl,
             format(as.integer(n), big.mark = ",")))
