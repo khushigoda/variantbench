@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VariantBench — Post-GWAS Pipeline</title>
+<style>
+  :root { --fg:#1b1f24; --muted:#57606a; --line:#d8dee4; --accent:#0969da; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:3rem 1.25rem 4rem;
+         font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;
+         color:var(--fg); background:#fff; }
+  main { max-width:52rem; margin:0 auto; }
+  h1 { font-size:1.6rem; line-height:1.3; margin:0 0 .5rem; letter-spacing:-.01em; }
+  .sub { color:var(--muted); margin:0 0 2rem; font-size:1rem; }
+  .cta { display:inline-block; padding:.7rem 1.15rem; background:var(--accent);
+         color:#fff; text-decoration:none; border-radius:6px; font-weight:600; }
+  .cta:hover { background:#0757ba; }
+  h2 { font-size:1.05rem; margin:2.5rem 0 .75rem; padding-bottom:.35rem;
+       border-bottom:1px solid var(--line); }
+  ul { padding-left:1.1rem; margin:0; }
+  li { margin:.3rem 0; }
+  a { color:var(--accent); }
+  ol.steps { padding-left:1.4rem; margin:0; column-gap:2.5rem; }
+  ol.steps li { margin:.25rem 0; }
+  footer { margin-top:3rem; padding-top:1rem; border-top:1px solid var(--line);
+           color:var(--muted); font-size:.875rem; }
+  @media (min-width:40rem) { ol.steps { columns:2; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>From GWAS Summary Statistics to Candidate Causal Genes</h1>
+  <p class="sub">A reproducible post-GWAS pipeline for circulating metabolic traits in
+  European-ancestry biobanks &mdash; Khushi Goda</p>
+
+  <p><a class="cta" href="report.html">Read the full analysis report &rarr;</a></p>
+
+  <h2>Pipeline steps</h2>
+  <ol class="steps">
+    <li>Cross-cohort meta-analysis</li>
+    <li>Heritability &amp; genetic correlation (LDSC)</li>
+    <li>Independent lead variants</li>
+    <li>Fine-mapping (SuSiE-RSS) &amp; coding annotation</li>
+    <li>Colocalization with molecular QTLs</li>
+    <li>Genome-wide Mendelian randomization</li>
+    <li>Cis-MR drug-target validation</li>
+  </ol>
+
+  <h2>Supporting documents</h2>
+  <ul>
+    <li><a href="https://github.com/khushigoda/variantbench/blob/main/ANALYSIS.md">ANALYSIS.md</a> &mdash; methods summary</li>
+    <li><a href="02_ldsc_vs_authors.md">Step 2 &mdash; LDSC vs published estimates</a></li>
+    <li><a href="03_leadvars_vs_authors.md">Step 3 &mdash; lead variants vs published</a></li>
+    <li><a href="04_finemap_vs_authors.md">Step 4 &mdash; fine-mapping vs published</a></li>
+    <li><a href="05_coloc_design.md">Step 5 &mdash; colocalization design notes</a></li>
+  </ul>
+
+  <footer>
+    Source code and Snakemake workflow:
+    <a href="https://github.com/khushigoda/variantbench">github.com/khushigoda/variantbench</a>
+  </footer>
+</main>
+</body>
+</html>
