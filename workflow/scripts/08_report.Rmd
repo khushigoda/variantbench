@@ -105,9 +105,10 @@ compose_figs <- function(paths, ncol = 2, panel_in = 4.5) {
 > lead-variant definition, and fine-mapping + coding annotation (Steps 1–4)**, each followed by a
 > multiple-choice question testing the biological reasoning behind that step. Steps 1–2 run across
 > all four traits; Steps 3–4 are shown for **LDL_C**, the positive-control trait whose 11 canonical
-> effector loci let the out-of-sample-LD behaviour be inspected locus by locus. Colocalization and
-> Mendelian randomization (Steps 5–7) are in progress and will be folded into this same report —
-> each with its own MCQ — once their pipeline rules have run.
+> effector loci let the out-of-sample-LD behaviour be inspected locus by locus. Colocalization with
+> molecular QTLs (Step 5) is also shown for **LDL_C**; Mendelian randomization (Steps 6–7) is in
+> progress and will be folded into this same report — each step with its own MCQ — once its pipeline
+> rules have run.
 
 This report follows four circulating metabolic traits — **LDL cholesterol (LDL_C)**, **total
 branched-chain amino acids (BCAA)**, **glucose**, and **lactate** — from published GWAS summary
@@ -576,6 +577,130 @@ convergence QC (most loci hit the IBSS iteration cap), which is why an `estimate
 diagnostic is reported per locus and `estimate_residual_variance` is fixed to `FALSE` — the
 documented remedy for out-of-sample LD. This is the single most important caveat of the analysis.*
 
+# Colocalization with molecular QTLs
+
+Fine-mapping (Step 4) narrows each locus to a short list of candidate causal variants, but a
+credible set does not by itself name the gene through which a variant acts. Colocalization answers
+that question: it asks whether the LDL-C association and a molecular-QTL association at the same
+locus are driven by *one shared causal variant* — evidence that the trait signal acts through that
+molecular phenotype (a gene's expression, splicing, or protein level) — or by two *distinct* variants
+that happen to sit nearby. This is the step that converts a statistical locus into a candidate
+effector gene with a mechanism attached.
+
+**Analysis and scope.** For each of the LDL-C effector loci I tested the GWAS signal against
+molecular QTLs using `coloc.abf` (the single-causal-variant approximate Bayes factor model) with the
+same priors the reference paper adopted (`p1 = p2 = 1e-4`, `p12 = 5e-6`). Two design choices carry
+the reasoning of this step. First, **tissue is chosen from the data, not assumed.** Liver is the
+biologically obvious tissue for LDL, but the eQTL Catalogue has only one liver dataset (GTEx, n=208)
+and it fine-maps none of these genes — so, exactly as the reference paper (a genome-wide `gpu-coloc`
+scan over the whole Catalogue) and Open Targets do, I scan every gene-level dataset across all seven
+quantification methods (`ge`, `exon`, `tx`, `txrev`, `leafcutter`, `microarray`, and `aptamer`
+protein levels) and colocalize each gene against the best-powered dataset that actually fine-maps it.
+Second, **the molecular layer is broad on purpose.** Restricting to bulk gene-expression QTLs would
+miss the mechanism at loci that act through splicing (captured by `exon`/`leafcutter`) or through
+circulating protein level (captured by the `aptamer` pQTLs) — so all quant methods are in scope and
+the winning method is reported per gene. The scope of this replication is deliberately narrower than
+the paper in one respect: the published study embeds colocalization in a disease → trait →
+molecular-QTL triplet graph, whereas this pipeline has no disease (e.g. coronary artery disease)
+layer, so I recover the trait ↔ molecular-QTL half of that graph at the canonical LDL effector loci.
+
+```{r coloc-table}
+coloc_best <- read_many(sm@input$coloc_best)
+if (!is.null(coloc_best) && nrow(coloc_best)) {
+  pp4 <- grep("PP.H4", names(coloc_best), fixed = TRUE, value = TRUE)[1]
+  pp3 <- grep("PP.H3", names(coloc_best), fixed = TRUE, value = TRUE)[1]
+  pp1 <- grep("PP.H1", names(coloc_best), fixed = TRUE, value = TRUE)[1]
+  coloc_best[, Outcome := fifelse(get(pp4) >= 0.80, "colocalizes (shared causal variant)",
+                          fifelse(get(pp3) >= 0.50, "distinct causal variants",
+                          fifelse(get(pp1) >= 0.50, "GWAS-only (QTL null in tissue)", "ambiguous")))]
+  tab <- coloc_best[order(-get(pp4)),
+    .(Gene = symbol, `QTL type` = quant, Tissue = qtl,
+      `PP.H4` = round(get(pp4), 3), `PP.H3` = round(get(pp3), 3),
+      `shared SNPs` = nshared, Outcome)]
+  show_table(tab, "Best-quant colocalization per LDL-C effector gene (PP.H4 = shared causal variant)")
+}
+```
+
+**Results.** Of the 12 effector genes carried forward (each tested against its best-powered
+fine-mapping dataset, out of 45 gene × quantification-method candidates in total), **five colocalize
+at PP.H4 ≥ 0.80**: HMGCR (PP.H4 = 1.00, skin exon-QTL), APOA5 (0.99, plasma protein level),
+CETP (0.99, lung expression), ABCG5 (0.97, spleen expression) and PCSK9 (0.94, tibial-nerve
+expression). The two textbook druggable LDL targets in the set — HMGCR (the statin target) and
+PCSK9 (the target of evolocumab/alirocumab) — both colocalize, which is the positive control that
+tells us the pipeline is finding real shared signals rather than noise. The remaining genes split
+into two informative classes. Four show a high probability of **distinct causal variants** (PP.H3):
+ABCA1 (0.99), APOB (0.96), LPL (0.85) and APOE (0.72) — the trait and the molecular QTL both
+associate at the locus, but through different causal variants, so the tested molecular phenotype in
+that tissue is not the mechanism. APOB is the instructive case: it carries strong coding-haplotype
+biology, and the LDL signal there is not explained by the skin exon-QTL, consistent with a direct
+protein-coding rather than an expression-regulatory mechanism. The last three — ABCG8, LDLR and
+NPC1L1 — are **GWAS-only** (high PP.H1): the molecular QTL is simply not associated in the tissue
+tested, most likely a power or tissue-context limitation rather than evidence against the gene.
+
+```{r coloc-overview-fig, results='asis'}
+cat("The colocalization outcome for every effector gene, decomposing the posterior into PP.H4",
+    "(one shared causal variant, red) versus PP.H3 (two distinct causal variants, grey). The",
+    "dashed line marks the PP.H4 = 0.80 colocalization threshold. Genes separate cleanly into the",
+    "five that colocalize on a shared variant and the loci that resolve to distinct signals.\n\n")
+show_figs(sm@input$coloc_overview)
+```
+
+```{r coloc-regional-fig, results='asis'}
+cat("Regional colocalization plots for the five colocalizing genes, each in the reference paper's",
+    "Supplementary-Figure-7 style: the LDL-C GWAS association (top) stacked over the molecular-QTL",
+    "association (bottom) on a shared genomic axis, with the lead variant of each panel marked and",
+    "PP.H4 annotated. A shared causal variant shows up as the two peaks coinciding. This is a",
+    "two-panel analogue of the paper's three-panel figure — we have no disease-GWAS layer to add",
+    "on top.\n\n")
+coloc_regional <- list.files(sm@input$coloc_plots, pattern = "\\.regional\\.png$", full.names = TRUE)
+show_figs(coloc_regional, cols = 2)
+```
+
+**How this compares to the source manuscript.** The correspondence is at the level of method and
+priors, not counts. The paper runs `gpu-coloc` genome-wide over SuSiE-fine-mapped Bayes factors
+(`coloc.bf_bf`) with priors `p1 = p2 = 1e-4`, `p12 = 5e-6`; this replication uses the single-signal
+`coloc.abf` on marginal statistics with the identical priors, which is the deliberately simpler,
+CPU-tractable case of the same model. Because the published analysis is genome-wide and
+disease-anchored while this one is a targeted trait-versus-molecular-QTL sweep over a handful of LDL
+effector loci, the honest comparison is *shared-signal recovery at known loci*, and it holds: the
+flagship recreation is HMGCR, where the LDL-C GWAS lead **rs12916** and the skin exon-QTL peak both
+resolve to the same narrow region — the QTL peak sits on **5-75355259**, the very variant the paper's
+Supplementary Figure 7 highlights as the fine-mapped causal SNP (PIP ≈ 0.64) — reproducing that
+figure's visual signature of a PP.H4 ≈ 1.0 colocalization from an independent implementation.
+
+**Limitations.** Colocalization is only as informative as the molecular data behind it, and three
+limits bound what this step can claim. First, **it is tissue- and context-specific**: a null result
+(the three GWAS-only genes) means the QTL was not associated in the *tissue tested*, not that the gene
+is not causal — the true effector tissue may simply be absent or underpowered in the Catalogue, which
+is precisely why liver could not be used for any of these genes. Second, **`coloc.abf` assumes a
+single causal variant per locus**; at loci with allelic heterogeneity (which the Step-4 fine-mapping
+already showed exists here) that assumption can understate a true colocalization or misassign the
+shared variant, and the paper's SuSiE-based `coloc.bf_bf` is the more faithful model for exactly that
+reason. Third, **the GWAS side inherits the out-of-sample-LD caveat** from the whole analysis — the
+marginal statistics are unaffected, but any locus where fine-mapping was already shaky is one to read
+with corresponding caution. Finally, a shared causal variant is strong evidence of a mechanism but not
+proof of causality for the trait; that step is Mendelian randomization (Steps 6–7).
+
+## MCQ — Colocalization
+
+**At the ABCG8 / LDLR / NPC1L1 loci the LDL-C GWAS signal is genome-wide significant, yet the
+colocalization posterior puts most of its mass on PP.H1 (GWAS-only), not PP.H4 or PP.H3. What is the
+correct interpretation?**
+
+- A. These genes are not causal for LDL cholesterol.
+- B. The colocalization failed and the run should be discarded.
+- C. The molecular QTL is not associated in the tissue/assay tested, so there is no QTL signal to colocalize with — a power/tissue-context limitation, not evidence against the gene.
+- D. PP.H1 means the two signals share a causal variant.
+
+*Answer: **C.** PP.H1 is the posterior for "association in the GWAS only, none in the QTL dataset."
+It arises when the molecular QTL simply is not detected in the tissue or assay available — a
+limitation of QTL power and tissue coverage (recall no liver dataset fine-maps any of these genes),
+not a statement that the gene is not causal. LDLR is the definitive counter-example: it is the
+canonical LDL-clearance receptor and unquestionably causal, yet it does not colocalize here because
+its expression QTL is not associated in the tested tissue. This is why a colocalization null must be
+read as "no evidence in this molecular layer," never as "the gene is not causal" (A), a failed run
+(B), or a shared signal (D, which is PP.H4).*
+
 # Limitations
 
 - **Out-of-sample LD.** Fine-mapping and distance-clumping use a 1000G EUR reference rather than
@@ -590,10 +715,13 @@ documented remedy for out-of-sample LD. This is the single most important caveat
   inspected locus by locus.
 - **Coding annotation explains few loci.** Of the credible-set variants, only a handful are
   missense; most signal is regulatory/intronic. Resolving those mechanisms needs molecular-QTL
-  colocalization — the next step, not yet included here.
+  colocalization (Step 5), which recovers a shared causal variant at five effector genes.
+- **Colocalization is tissue- and model-limited.** `coloc.abf` assumes one causal variant per locus,
+  and a null result reflects the tissue/assay tested rather than evidence against the gene; the
+  reference paper's SuSiE-based `coloc.bf_bf` over the full eQTL Catalogue is the more complete model.
 - **EUR-only.** Exposures and (planned) outcomes are European-ancestry, so estimates may not
   generalize — a deliberate choice to keep LD and allele frequencies matched.
 
-*Steps 5–7 (colocalization, Mendelian randomization) are in progress and will be added to this
-report, each with its own MCQ, once their pipeline rules have run.*
+*Mendelian randomization (Steps 6–7) is in progress and will be added to this report, with its own
+MCQ, once its pipeline rules have run.*
 

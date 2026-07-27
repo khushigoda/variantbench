@@ -129,7 +129,8 @@ rule all:
         # needs a config/coloc_targets.<METAB>.tsv). Self-bridging rules, no --use-conda.
         expand("results/coloc/{metab}.eqtl_coverage.best.tsv", metab=COLOC_METABOLITES),
         expand("results/coloc/{metab}.coloc.tsv",              metab=COLOC_METABOLITES),
-        expand("results/coloc/{metab}.coloc.best.tsv",         metab=COLOC_METABOLITES)
+        expand("results/coloc/{metab}.coloc.best.tsv",         metab=COLOC_METABOLITES),
+        expand("results/coloc/{metab}.coloc_overview.png",     metab=COLOC_METABOLITES)
 
 # =========================================================
 # Step 1 — meta-analysis (EstBB + UKBB_EUR -> meta), reads RAW files directly
@@ -463,6 +464,36 @@ rule coloc:
         "API={params.api} "
         "P1={params.p1} P2={params.p2} P12={params.p12} PP4_MIN={params.pp4} "
         "Rscript workflow/scripts/05a_coloc.R"
+
+# 5b  coloc_plots: regional stacked plots (GWAS over molecular-QTL, shared axis,
+#     PP.H4 annotated) for every colocalizing gene + a PP.H4-vs-PP.H3 overview.
+#     Re-slices the GWAS window (tabix) and re-fetches QTL associations (eQTL
+#     Catalogue REST) because the coloc engine persists only summary tables.
+#     Self-bridging like coloc: no `conda:` directive, `conda run -n {r}` inside.
+rule coloc_plots:
+    input:
+        best="results/coloc/{metabolite}.coloc.best.tsv",
+        loci="results/ld/{metabolite}.loci.tsv",
+        gwas="results/meta/{metabolite}.meta.tsv.bgz",
+        gwas_tbi="results/meta/{metabolite}.meta.tsv.bgz.tbi",
+        targets=coloc_targets_file,
+        rscript="workflow/scripts/05b_coloc_plots.R"
+    output:
+        overview="results/coloc/{metabolite}.coloc_overview.png",
+        # per-gene regional plots go to results/coloc/plots/{trait}.{gene}.regional.png
+        # (count varies with #colocalizing genes, so declared as a directory output)
+        plotdir=directory("results/coloc/plots")
+    params:
+        r_env=config["envs"]["r"],
+        api=config["ref"].get("eqtl_api_base", "https://www.ebi.ac.uk/eqtl/api/v2"),
+        pp4=config["ld_prep"].get("coloc_pp4_min", 0.8)
+    shell:
+        "conda run -n {params.r_env} --no-capture-output "
+        "env TRAIT={wildcards.metabolite} "
+        "LDDIR=results/ld OUTDIR=results/coloc "
+        "GWAS_BGZ={input.gwas} TARGETS={input.targets} "
+        "BESTCOLOC={input.best} API={params.api} PP4_MIN={params.pp4} "
+        "Rscript workflow/scripts/05b_coloc_plots.R"
 #
 # # =========================================================
 # # Step 6 — genome-wide MR (metabolite -> outcome)
@@ -535,7 +566,11 @@ rule report:
         consequence_summary=expand("results/finemap/{metab}.consequence_summary.png", metab=REPORT_FINEMAP),
         # Per-locus regional plots — a directory side-output of rule finemap_plots
         # (the count of plots varies with #loci, so it is not a declared DAG output).
-        finemap_plots="results/finemap/plots"
+        finemap_plots="results/finemap/plots",
+        # Step 5 — colocalization overview + per-gene regional plots (coloc trait only)
+        coloc_best=expand("results/coloc/{metab}.coloc.best.tsv",   metab=COLOC_METABOLITES),
+        coloc_overview=expand("results/coloc/{metab}.coloc_overview.png", metab=COLOC_METABOLITES),
+        coloc_plots="results/coloc/plots"
     output: "report/report.html"
     params: seed=config["params"]["seed"]
     conda:  config["envs"]["r"]
