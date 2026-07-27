@@ -19,6 +19,20 @@ results/                  all outputs (git-ignored except small tables)
 report/report.html        final self-contained report
 ```
 
+## Viewing the report (no rerun needed)
+
+`report/report.html` is **fully self-contained** — every figure is base64-inlined and all
+JS/CSS is embedded, so it needs no internet and no pipeline run to view. GitHub's file
+browser shows HTML *source* rather than rendering it, so use one of:
+
+- **One click (in-browser):**
+  [**View the report via htmlpreview**](https://htmlpreview.github.io/?https://github.com/khushigoda/variantbench/blob/main/report/report.html)
+  *(the file is ~6.7 MB, so give it a few seconds to load).*
+- **Always works (offline):** clone or download the repo and open `report/report.html`
+  in any browser — e.g. `open report/report.html` (macOS) / `xdg-open report/report.html` (Linux).
+
+Regenerate from source at any time with `snakemake --use-conda --cores 1 --force report`.
+
 ## Status (current submission)
 
 **Step 1 — meta-analysis: validated for all four traits.** The from-scratch fixed-effect IVW
