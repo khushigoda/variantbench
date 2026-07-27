@@ -1,12 +1,12 @@
-# VariantBench — Analysis Completed
+# VariantBench — Methods
 
-*Scope locked 2026-07-24. The full analysis pipeline has been executed, from GWAS meta-analysis through statistical fine-mapping, colocalization, and causal inference (MR). Method choices and their implementation are documented; results are in the rendered HTML report.*
+*Analysis pipeline executing steps 0–8: meta-analysis, heritability, fine-mapping, colocalization, and MR. Scope locked 2026-07-24.*
 
 ---
 
-## 1. Analysis summary
+## 1. Overview
 
-**Published GWAS summary statistics** for four circulating metabolic traits (LDL_C, Total BCAA, Glucose, Lactate) were meta-analyzed across two European cohorts (EstBB and UKBB-EUR), then interrogated through a complete post-GWAS causal-inference pipeline: LDSC heritability & genetic correlation, locus definition by genome-wide significance + distance clumping, SuSiE fine-mapping, eQTL colocalization, and two-sample MR against cardiometabolic diseases (CAD, T2D). No individual-level genotype data is used; all steps use **1000 Genomes EUR** as the reference panel (out-of-sample LD), kept consistent across fine-mapping, instrument pruning, and MR clumping. The analysis is ancestry-matched throughout — EUR exposures, EUR outcomes, EUR LD — so allele frequencies and LD structure remain consistent. The design includes **three positive-control exposures** (LDL_C, BCAA, Glucose) with RCT-validated or mechanistic disease links and drug-target genes, plus **one contrast exposure** (Lactate) with weaker prior evidence, to demonstrate the pipeline discriminates signal from noise.
+Four circulating metabolic traits (LDL_C, BCAA, Glucose, Lactate) — meta-analyzed across EstBB and UKBB-EUR cohorts — are interrogated through LDSC, SuSiE fine-mapping, eQTL colocalization, and two-sample MR against CAD and T2D. Analysis is EUR-only throughout (ancestry-matched exposures, outcomes, and 1000G-EUR LD reference). Design includes three drug-target positive controls (LDL_C, BCAA, Glucose) and one contrast (Lactate) to demonstrate discriminative power.
 
 ---
 
@@ -89,34 +89,7 @@ chosen to match the effector gene), and which MR sensitivity analyses to emphasi
 
 ---
 
-## 5. Results & Findings
-
-### Meta-analysis
-- **LDL_C:** 321 genome-wide-significant leads (GWS) identified; meta-analysis of EstBB and UKBB-EUR achieves concordance r ≈ 0.98 with published estimates, validating the two-cohort combination.
-- **BCAA, Glucose, Lactate:** GWS leads identified and meta-analyzed similarly; all four traits show strong agreement with published sumstats.
-
-### Fine-mapping (SuSiE on 1000G-EUR LD)
-- **LDL_C:** 286 candidates selected for fine-mapping; 231 remain after LD clumping (r² < 0.01); 219 pass final harmonization with the LD panel.
-  - **Key effector genes:** PCSK9 (credible set PIP > 0.9), HMGCR, NPC1L1, LDLR — all classical lipid-lowering drug targets.
-- **BCAA:** Fine-mapped loci anchor on BCKDK and PPM1K (branched-chain amino acid catabolism).
-- **Glucose:** SuSiE recovers credible sets at GCK, GCKR, G6PC2, SLC30A8 — the known glucose metabolism hub.
-- **Lactate:** Smaller locus set with less functional annotation, as expected for a weaker causal candidate.
-
-### Colocalization (eQTL Catalogue)
-- **LDL_C + CAD:** PCSK9 locus shows strong coloc signal (PP.H4 > 0.8) with liver eQTL, supporting a shared genetic variant driving both LDL and cardiovascular disease risk.
-- **BCAA + T2D:** Drug-target genes coloc with pancreatic islet eQTLs, linking elevated BCAA metabolism to insulin secretion.
-- **Glucose + T2D:** Coloc at GCK and GCKR with islet eQTLs confirms the glycemia→T2D axis.
-- **Lactate:** Weaker / absent coloc signals, consistent with a more distant causal pathway.
-
-### Mendelian Randomization
-- **Genome-wide MR (LDL_C→CAD):** IVW multivariate random-effects with 219 instruments yields a strong, highly significant positive effect (OR per 1-SD LDL increase ≈ 1.66, p < 1e-76), recovering the RCT-proven statin/PCSK9 relationship.
-- **Cis-MR (drug-target validation):** All four LDL drug-target genes (PCSK9, HMGCR, NPC1L1, LDLR) show positive cis-MR effects on CAD, each 95% CI clear of the null — the strongest possible validation that fine-mapped loci point to causal genes.
-- **BCAA→T2D & Glucose→T2D:** Similarly positive MR estimates recover the metabolite→diabetes causal chain.
-- **Lactate:** Weaker or null MR effects, supporting the contrast role.
-
----
-
-## 6. Report structure — one section per step
+## 5. Pipeline structure
 
 The pipeline is nine Snakemake rules (Step 0–8); the report (`workflow/scripts/08_report.Rmd`,
 knitting to a single self-contained `report/report.html`) has **one section per analytical
@@ -142,21 +115,19 @@ notebook.
 
 ---
 
-## 7. Key methodological notes
+## 6. Key methodological choices
 
-### Out-of-sample LD (1000G-EUR, not in-sample UKBB)
-The LD reference for SuSiE fine-mapping, candidate clumping, and MR instrument pruning is an **out-of-sample** European panel (1000 Genomes Phase 3, 526 unrelated EUR founders, hg38), **not** the in-sample UKBB LD the reference paper used. Out-of-sample LD can miscalibrate SuSiE credible sets (SuSiE applies the estimate_s_rss diagnostic to flag severity) and may prune instruments differently. This is accepted as a known limitation for tractability and stated in the report.
-
-### Ancestry matching across all steps
-Exposures (EstBB+UKBB-EUR), outcomes (CAD GCST90132314 EUR-only, T2D DIAGRAM EUR), and LD reference (1000G-EUR) are all European ancestry. This keeps allele frequencies and LD structure consistent and avoids the known bias of ancestry mismatch in two-sample MR.
-
-### Positive controls & discrimination
-LDL_C, BCAA, and Glucose are exposures with RCT-proven or mechanistic causal links to CAD/T2D and include known drug-target genes (PCSK9/HMGCR/NPC1L1/LDLR for LDL; GCK for Glucose). Cis-MR at these genes demonstrates the pipeline recovers genuine causal signals. Lactate is a contrast exposure with weaker prior evidence, testing whether the analysis down-weights less-compelling biology.
+| Aspect | Choice | Rationale |
+|---|---|---|
+| **LD reference** | 1000G Phase 3 EUR (526 founders, hg38), out-of-sample | Consistent ancestry across exposures, outcomes, and LD. Out-of-sample is a known limitation (miscalibration risk), accepted for tractability. estimate_s_rss diagnostic flags severity. |
+| **Ancestry** | EUR-only throughout | Exposures (EstBB+UKBB-EUR), outcomes (CAD EUR, T2D EUR), LD (1000G-EUR). Avoids ancestry-mismatch bias in MR and LDSC. |
+| **Fine-mapping** | SuSiE on 1000G-EUR LD: L=10, coverage=0.95, scaled_prior_variance=0.1, estimate_residual_variance=FALSE | Matches authors' (Tambets et al.) recommendations; out-of-sample LD noted as limitation. |
+| **MR instruments** | Clumped to r²<0.01 against 1000G-EUR; palindromes excluded; harmonized on chr:pos+allele | Standard practice; out-of-sample LD may prune differently than in-sample. |
+| **Positive controls** | LDL_C, BCAA, Glucose (drug-target validated) vs. Lactate (contrast) | Tests pipeline discrimination: recovers strong signal at known targets; down-weights weaker biology. |
+| **Colocalization** | eQTL Catalogue, tissue-matched | Shared-variant assumption within single eQTL per locus; tissue choice matches effector gene biology. |
 
 ---
 
-## 8. Rendered report
+## 7. Rendered report
 
-The complete analysis report, knitted from `workflow/scripts/08_report.Rmd`, is available at:
-
-**[report.html](docs/report.html)** — Full interactive HTML report with all plots, tables, MCQ, and results.
+Complete analysis (plots, tables, MCQ): **[report.html](docs/report.html)**
