@@ -80,7 +80,7 @@ compose_figs <- function(paths, ncol = 2, panel_in = 4.5) {
   if (!length(paths)) return(invisible(NULL))
   if (length(paths) == 1) return(show_figs(paths))
   grobs <- lapply(paths, function(p)
-    ggdraw() + draw_grob(rasterGrob(readPNG(p), interpolate = TRUE)))
+    ggdraw() + draw_grob(grid::rasterGrob(readPNG(p), interpolate = TRUE)))
   g <- plot_grid(plotlist = grobs, ncol = ncol)
   nrow <- ceiling(length(paths) / ncol)
   tmp <- tempfile(fileext = ".png")
