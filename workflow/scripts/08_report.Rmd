@@ -271,19 +271,14 @@ shared biological association.
 
 ## MCQ — Meta-analysis
 
-**After combining the EstBB and UKBB_EUR association results and comparing the pooled and
-cohort-specific LDL-C signals, which conclusion is best supported?**
+**Two cohorts can be pooled for very different reasons: one cohort may simply dominate the result, or both may contribute evidence for the same underlying associations. Which description best matches the EstBB–UKBB_EUR analysis?**
 
-- A. The cohort-specific effects were broadly concordant and the pooled effects reproduced the
-  published European meta-analysis, supporting a largely shared LDL-C genetic architecture that can
-  be studied with greater power after pooling.
-- B. Most associated variants had opposing effects between cohorts, supporting predominantly
-  population-specific LDL-C mechanisms.
-- C. The pooled associations were driven almost entirely by EstBB, with little contribution from
-  UKBB_EUR.
-- D. The two cohorts measured genetically distinct phenotypes and should not have been combined.
+A. Most pooled LDL-C associations arose because large effects in EstBB compensated for effects in the opposite direction in UKBB_EUR.
+B. The cohorts generally supported effects in the same direction, and pooling strengthened a largely shared LDL-C association architecture.
+C. Pooling revealed that the two cohorts measured biologically different forms of LDL-C.
+D. The pooled results primarily reproduced variants observed only in UKBB_EUR, with minimal contribution from EstBB.
 
-*Answer: **A.** The cross-cohort effect patterns are broadly concordant, and the independently
+*Answer: **B.** The cross-cohort effect patterns are broadly concordant, and the independently
 reconstructed pooled effects match the published European meta-analysis. Together, those results
 support a largely shared LDL-C genetic architecture and justify combining the cohorts to increase
 association power, while heterogeneous individual loci remain subject to the Cochran's-*Q* caveat
@@ -370,18 +365,17 @@ run high by construction.
 
 ## MCQ — Heritability and genetic correlation (LDSC)
 
-**After estimating common-variant heritability and cross-biobank genetic correlation for LDL-C,
-BCAA, glucose and lactate, which pattern was supported by the analysis?**
+**Imagine placing the four metabolites on a map with two axes:
+	horizontal axis: contribution of common inherited variation;
+	vertical axis: reproducibility of genetic effects between EstBB and UKBB.
+Which map would match the results?**
 
-- A. LDL-C showed the strongest common-variant contribution and lactate the weakest, while all four
-  traits retained broadly similar genetic architectures across EstBB and UKBB.
-- B. All four traits had approximately identical heritability, but their genetic effects differed
-  substantially between the two biobanks.
-- C. Lactate showed the strongest inherited contribution and the greatest cross-biobank
-  reproducibility.
-- D. None of the traits showed sufficient shared genetic architecture to justify meta-analysis.
+A. Lactate would have the strongest common-variant contribution, while LDL-C would show the weakest cross-cohort reproducibility.
+B. All four metabolites would occupy nearly the same position on both axes.
+C. BCAA and glucose would show high heritability but little shared genetic architecture between cohorts.
+D. LDL-C would rank highest and lactate lowest for common-variant heritability, while all four traits would remain relatively high on cross-cohort reproducibility.
 
-*Answer: **A.** The analysis places LDL-C at the highest and lactate at the lowest end of the four
+*Answer: **D.** The analysis places LDL-C at the highest and lactate at the lowest end of the four
 common-variant heritability estimates, while the consistently high EstBB–UKBB genetic correlations
 show that the traits' inherited architectures are broadly shared across cohorts. Heritability and
 genetic correlation answer different questions: the traits can differ in the amount of variance
@@ -467,16 +461,12 @@ show_figs(sm@input$maf_effect)
 
 ## MCQ — Lead variants
 
-**After identifying independent LDL-C lead variants and comparing their effect sizes across the
-allele-frequency spectrum, which model of LDL-C genetic architecture was best supported?**
+**A follow-up study must choose one design based on the observed LDL-C lead-variant architecture. Which design is most consistent with the analysis?**
 
-- A. LDL-C is influenced by numerous common variants with relatively small effects together with a
-  smaller set of rare variants carrying larger effects.
-- B. LDL-C is primarily a monogenic trait in which a few rare variants explain nearly all inherited
-  variation.
-- C. LDL-C is influenced almost exclusively by common variants, with no credible contribution from
-  rare variants.
-- D. Allele frequency and effect size showed no discernible relationship among the lead variants.
+A. Focus exclusively on Mendelian families because LDL-C appears to be governed mainly by rare, highly penetrant mutations.
+B. Increase common-variant GWAS sample size but exclude rare variants because their observed effects were negligible.
+C. Combine larger common-variant association studies with targeted sequencing or functional follow-up of rarer, larger-effect variants.
+D. Treat allele frequency as irrelevant because common and rare lead variants showed comparable effect-size distributions.
 
 *Answer: **A.** The lead-variant distribution contains many common small-effect associations and a
 smaller group of rare, larger-effect associations. This supports a mixed genetic architecture rather
@@ -718,19 +708,14 @@ proof of causality for the trait; that step is Mendelian randomization (Steps 6�
 
 ## MCQ — Colocalization
 
-**Fine-mapping nominated both coding and noncoding candidates at established LDL-C loci. After
-comparing the LDL-C associations with molecular QTLs across the available tissues and assays, which
-mechanistic conclusion was best supported?**
+**Which mechanistic map most accurately summarizes what the colocalization analysis added to the fine-mapping results?**
 
-- A. HMGCR and PCSK9 were consistent with shared LDL-C and molecular-QTL signals, whereas the APOB
-  LDL-C association was better explained by a distinct coding mechanism than by the tested exon-QTL.
-- B. Every established LDL-C gene colocalized with a liver expression QTL, indicating one common
-  liver-expression mechanism across all loci.
-- C. Failure to colocalize LDLR and NPC1L1 demonstrated that these genes do not causally influence
-  LDL-C.
-- D. All regional overlaps between LDL-C and molecular QTLs represented the same causal variant.
+A. Every LDL-C locus was assigned to a liver-expression mechanism, eliminating the need to consider coding effects or other tissues.
+B. Some loci, including HMGCR and PCSK9, supported a shared LDL-C–molecular-QTL signal; APOB favored a distinct coding mechanism; and several other loci remained unresolved because the available QTL context was uninformative.
+C. Any molecular QTL located near an LDL-C association was considered the causal mediator, regardless of whether the association peaks aligned.
+D. Failure to detect a shared molecular-QTL signal excluded LDLR, NPC1L1 and ABCG8 from LDL-C biology.
 
-*Answer: **A.** The analysis supports locus-specific mechanisms rather than one universal route.
+*Answer: **A.** TThe results separated the loci into shared-signal, distinct-signal and GWAS-only classes rather than assigning one universal regulatory mechanism. The analysis supports locus-specific mechanisms rather than one universal route.
 HMGCR and PCSK9 provide evidence that the LDL-C and molecular-QTL associations can share a causal
 signal, while APOB favors distinct GWAS and exon-QTL signals and also carries an independently
 fine-mapped missense candidate. Thus, proximity to a molecular QTL is not sufficient to assign
