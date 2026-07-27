@@ -397,8 +397,10 @@ rule finemap_plots:
 # gene against the best-powered dataset that actually fine-maps it.
 #
 # 5a  coverage_scan: read the small credible_sets.tsv.gz of ALL ge datasets,
-#     find which fine-map each target gene, write {trait}.eqtl_coverage.best.tsv
-#     (gene -> dataset,study_id,tissue,n). Light (no lBF matrices), stdlib python.
+#     sweep the WHOLE Catalogue across ALL quant methods (ge/exon/tx/txrev/
+#     leafcutter/microarray/aptamer), reading only the small credible_sets.tsv.gz
+#     per dataset. Writes {trait}.eqtl_coverage.best.tsv (one row per gene x quant
+#     method -> best-powered dataset + best_mtid). Light (no lBF matrices), stdlib.
 rule coverage_scan:
     input:
         targets=config["ld_prep"]["coloc_targets"],
@@ -412,24 +414,25 @@ rule coverage_scan:
         "TARGETS={input.targets} OUTDIR=results/coloc "
         "python workflow/scripts/05_coverage_scan.py"
 
-# 5b  coloc: reuse the persisted 04c SuSiE fits (never re-fit); for each distinct
-#     dataset in best.tsv, stream+filter its ~500 MB lBF matrix once (files are
-#     NOT tabix-indexed; EBI advises full download over many tabix pokes) and
-#     cache the small subset; then coloc.bf_bf per gene. DAG hook mirrors
-#     annotate: loci.tsv stands in for the per-locus .susie.rds/z.tsv/gwas.tsv.
+# 5b  coloc (single-signal ABF): for each (gene x quant) candidate in best.tsv,
+#     tabix-slice the locus window from the bgzipped meta stats (GWAS marginal
+#     beta/se) and pull the fine-mapped molecular trait's associations from the
+#     eQTL Catalogue REST API (QTL marginal beta/se), then coloc::coloc.abf.
+#     No lBF download, no SuSiE re-fit — assumes <=1 causal variant per window
+#     (multi-signal SuSiE-coloc is the documented future refinement, see report).
 rule coloc:
     input:
         loci="results/ld/{metabolite}.loci.tsv",
-        finemap="results/finemap/{metabolite}.finemap.tsv",   # proxy: 04c wrote the .susie.rds
+        gwas="results/meta/{metabolite}.meta.tsv.bgz",         # tabix'd marginal stats
+        gwas_tbi="results/meta/{metabolite}.meta.tsv.bgz.tbi",
         best="results/coloc/{metabolite}.eqtl_coverage.best.tsv",
         targets=config["ld_prep"]["coloc_targets"],
         rscript="workflow/scripts/05a_coloc.R"
     output:
-        allpairs="results/coloc/{metabolite}.coloc.tsv",       # every signal-pair tested
-        best="results/coloc/{metabolite}.coloc.best.tsv"       # best pair per gene + coloc call
-        # results/coloc/{metabolite}.{dataset}.lbf.tsv.gz also written (cached eQTL subsets; gitignored)
+        allpairs="results/coloc/{metabolite}.coloc.tsv",       # every (gene x quant) tested
+        best="results/coloc/{metabolite}.coloc.best.tsv"       # best quant per gene + coloc call
     params:
-        ftp=config["ref"]["eqtl_ftp_base"],
+        api=config["ref"].get("eqtl_api_base", "https://www.ebi.ac.uk/eqtl/api/v2"),
         p1=config["ld_prep"]["coloc_priors"]["p1"],
         p2=config["ld_prep"]["coloc_priors"]["p2"],
         p12=config["ld_prep"]["coloc_priors"]["p12"],
@@ -437,9 +440,10 @@ rule coloc:
     conda:  config["envs"]["r"]
     shell:
         "TRAIT={wildcards.metabolite} "
-        "FMDIR=results/finemap LDDIR=results/ld OUTDIR=results/coloc "
+        "LDDIR=results/ld OUTDIR=results/coloc "
+        "GWAS_BGZ={input.gwas} "
         "TARGETS={input.targets} BEST={input.best} "
-        "EQTL_FTP_BASE={params.ftp} "
+        "API={params.api} "
         "P1={params.p1} P2={params.p2} P12={params.p12} PP4_MIN={params.pp4} "
         "Rscript workflow/scripts/05a_coloc.R"
 #

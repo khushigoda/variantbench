@@ -69,7 +69,14 @@ ref:
   hm3_snplist: data/ref/w_hm3.snplist        # (A) LDSC       — Step 2
   ld_scores:   data/ref/eur_w_ld_chr/        # (A) LD SCORES  — Step 2 only
   #geno_panel:  data/ref/1kg_eur_grch38       # (B) LD MATRIX  — Steps 3,4,6,7 (PLINK bfile prefix)
-  #eqtl_dataset: QTD000584                    # Step 5: eQTL Catalogue dataset id (edit once locus chosen)
+  # Step 5 — eQTL Catalogue r7 (GRCh38). Coverage scan sweeps the WHOLE catalogue
+  # across ALL quant methods (ge/exon/tx/txrev/leafcutter/microarray/aptamer) via
+  # the small credible_sets.tsv.gz files on FTP; coloc.abf then pulls marginal
+  # associations per fine-mapped molecular trait from the REST API. Tissue is
+  # chosen data-driven, not assumed (GTEx liver n=208 fine-maps none of our genes).
+  # FTP:  /pub/databases/spot/eQTL/susie/<study>/<dataset>/<dataset>.credible_sets.tsv.gz
+  eqtl_ftp_base: https://ftp.ebi.ac.uk/pub/databases/spot/eQTL/susie
+  eqtl_api_base: https://www.ebi.ac.uk/eqtl/api/v2
 
 # ---- Analysis parameters ----
 params:
@@ -97,7 +104,13 @@ ld_prep:
   annot_coverage:      0.95     # Step-4d: CS coverage level annotated for missense (95% per take-home)
   info_min:       0.6           # imputation INFO QC (metabolites)
   coloc_priors:   {p1: 1.0e-4, p2: 1.0e-4, p12: 5.0e-6}
+  coloc_pp4_min:  0.8            # Step-5: PP.H4 threshold to call a colocalisation
   mhc_region:     {chr: 6, start: 28510120, end: 33480577}  # excluded in fine-mapping
+
+  # Step 5 colocalisation target genes: locus -> effector Ensembl gene (GRCh38).
+  # Single source of truth is a TSV (locus<TAB>ensg<TAB>symbol), mirroring the
+  # cad_effector_anchors.tsv idiom — read by 05a_coloc.R, no YAML dep in R.
+  coloc_targets:  config/coloc_targets.LDL_C.tsv
 
 # ---- Tool environments (conda env names on this machine) ----
 envs:
