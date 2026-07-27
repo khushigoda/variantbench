@@ -15,7 +15,7 @@ output:
 ---
 
 > **GitHub Repository:** https://github.com/khushigoda/variantbench  
-> **Analysis Methods:** [ANALYSIS.md](../ANALYSIS.md)
+> **Analysis Methods:** [ANALYSIS.md](https://github.com/khushigoda/variantbench/blob/main/ANALYSIS.md)
 
 ---
 
@@ -184,20 +184,20 @@ it **discriminates** strong causal signals from weak ones.
 
 [^tambets]: Tambets R, *et al.* Genome-wide association study for circulating metabolic traits in
 619,372 individuals. *medRxiv* 2024.10.15.24315557 (2024); published in *Nature* (2026),
-doi:10.1038/s41586-026-10532-5. Summary statistics via the NHGRI-EBI GWAS Catalog.
+[doi:10.1038/s41586-026-10532-5](https://doi.org/10.1038/s41586-026-10532-5) Summary statistics via the NHGRI-EBI GWAS Catalog.
 
 [^aragam]: Aragam KG, *et al.* Discovery and systematic characterization of risk variants and genes
 for coronary artery disease in over a million participants. *Nat Genet* 54, 1803–1815 (2022),
-doi:10.1038/s41588-022-01233-6. GWAS Catalog `GCST90132314` (European-ancestry release).
+[doi:10.1038/s41588-022-01233-6](https://doi.org/10.1038/s41588-022-01233-6) GWAS Catalog `GCST90132314` (European-ancestry release).
 
 [^ference]: Ference BA, *et al.* Low-density lipoproteins cause atherosclerotic cardiovascular
 disease. 1. Evidence from genetic, epidemiologic, and clinical studies. A consensus statement from
 the European Atherosclerosis Society Consensus Panel. *Eur Heart J* 38(32), 2459–2472 (2017),
-doi:10.1093/eurheartj/ehx144.
+[doi:10.1093/eurheartj/ehx144](https://doi.org/10.1093/eurheartj/ehx144)
 
 [^lotta]: Lotta LA, *et al.* Genetic predisposition to an impaired metabolism of the branched-chain
 amino acids and risk of type 2 diabetes: a Mendelian randomisation analysis. *PLoS Med* 13(11),
-e1002179 (2016), doi:10.1371/journal.pmed.1002179.
+e1002179 (2016), [doi:10.1371/journal.pmed.1002179](https://doi.org/10.1371/journal.pmed.1002179)
 
 **Scope and resource constraints, stated up front.** Because of finite compute and a fixed
 time budget, the analysis was **not** run across the full planned set of metabolites — the

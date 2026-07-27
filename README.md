@@ -9,7 +9,13 @@ glucose as drug-target-validated positive controls, lactate as the weak-prior co
 
 ## Analysis report
 
-**[Full analysis report (HTML)](docs/report.html)** — Plots, tables, fine-mapping credible sets, colocalization results, MR estimates, and MCQ for all steps.
+### ▶ [**View the full analysis report**](https://khushigoda.github.io/variantbench/) ◀
+
+Rendered HTML with all plots, tables, fine-mapping credible sets, colocalization
+results, MR estimates, and the MCQ for each of the seven steps.
+
+> Note: the [`docs/report.html`](docs/report.html) source file will not render on
+> github.com — GitHub serves committed HTML as plain text, so use the link above.
 
 **[Methods summary (ANALYSIS.md)](ANALYSIS.md)** — Scope, exposures, outcomes, and methodological choices (concise overview).
 
