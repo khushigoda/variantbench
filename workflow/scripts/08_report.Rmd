@@ -69,13 +69,14 @@ prefer_webp <- function(paths) {
 # base64 data-URI with an EXPLICIT mime map. knitr::image_uri() infers the type via
 # mime::guess_type(), which is unreliable for .webp across mime versions — a wrong
 # type silently yields a broken <img> in the self-contained HTML, so we set it here.
+# Encoder is xfun::base64_encode (a hard dependency of knitr, so always present —
+# no new package needed in variantbench-r).
 img_uri <- function(p) {
   ext  <- tolower(sub(".*\\.", "", p))
   mime <- switch(ext, webp = "image/webp", png = "image/png",
                  jpg = , jpeg = "image/jpeg", svg = "image/svg+xml",
                  paste0("image/", ext))
-  b64 <- base64enc::base64encode(readBin(p, "raw", file.info(p)$size))
-  sprintf("data:%s;base64,%s", mime, b64)
+  sprintf("data:%s;base64,%s", mime, xfun::base64_encode(p))
 }
 
 show_figs <- function(paths, cols = NULL) {
@@ -90,12 +91,12 @@ show_figs <- function(paths, cols = NULL) {
   if (cols <= 1 || length(paths) == 1) {
     for (p in paths)
       cat(sprintf('<img src="%s" style="max-width:100%%;display:block;margin:0.5em auto;" alt="%s"/>\n\n',
-                  knitr::image_uri(p), basename(p)))
+                  img_uri(p), basename(p)))
   } else {
     cat(sprintf('<div style="display:grid;grid-template-columns:repeat(%d,1fr);gap:0.6em;margin:0.5em 0;">\n', cols))
     for (p in paths)
       cat(sprintf('<img src="%s" style="width:100%%;height:auto;" alt="%s"/>\n',
-                  knitr::image_uri(p), basename(p)))
+                  img_uri(p), basename(p)))
     cat('</div>\n\n')
   }
   invisible(NULL)
@@ -116,8 +117,16 @@ compose_figs <- function(paths, ncol = 2, panel_in = 4.5) {
   tmp <- tempfile(fileext = ".png")
   ggsave(tmp, g, width = panel_in * ncol, height = panel_in * nrow,
          dpi = 150, device = grDevices::png, type = "cairo", bg = "white")
+  # Re-encode the composite to WebP before inlining (these tiled 2x2 images are the
+  # heaviest single figures in the report). cwebp lives in variantbench-r; if it is
+  # missing we inline the PNG unchanged.
+  if (nzchar(Sys.which("cwebp"))) {
+    tmp_w <- sub("\\.png$", ".webp", tmp)
+    system(sprintf("cwebp -q 85 '%s' -o '%s' 2>/dev/null", tmp, tmp_w))
+    if (file.exists(tmp_w) && file.info(tmp_w)$size > 0) tmp <- tmp_w
+  }
   cat(sprintf('<img src="%s" style="max-width:100%%;display:block;margin:0.5em auto;" alt="composite"/>\n\n',
-              knitr::image_uri(tmp)))
+              img_uri(tmp)))
   invisible(NULL)
 }
 ```
@@ -570,10 +579,8 @@ show_figs(c(sm@input$finemap_summary, sm@input$consequence_summary), cols = 1)
 #   APOE    - the canonical lipid locus with multiple credible sets (allelic heterogeneity)
 featured <- c("PCSK9", "ABCG5_8", "APOE")
 plotdir  <- sm@input$finemap_plots[1]
-# Use WebP if available (60-70% smaller); fall back to PNG
-regional_webp <- file.path(plotdir, sprintf("%s.%s.regional.webp", "LDL_C", featured))
-regional_png <- file.path(plotdir, sprintf("%s.%s.regional.png", "LDL_C", featured))
-regional_pngs <- ifelse(file.exists(regional_webp), regional_webp, regional_png)
+# Pass PNG paths; show_figs() swaps in the .webp sibling when one exists.
+regional_pngs <- file.path(plotdir, sprintf("%s.%s.regional.png", "LDL_C", featured))
 cat("Three representative loci are featured here, of the 11 fine-mapped. PCSK9 shows the R46L",
     "drug-target coding variant recovered at high PIP; ABCG5/ABCG8 shows two missense variants",
     "across a two-gene locus; and APOE shows a locus resolved into multiple credible sets",
@@ -786,15 +793,14 @@ cat("Per-variant effect on CAD (log-OR) against per-variant effect on LDL-C (SD)
 show_figs(sm@input$gwmr_scatter)
 ```
 
-```{r gwmr-fig, results='asis', fig.width=10, fig.height=6}
-gwmr_scatter <- file.path("results/mr", "LDL_C.CAD.scatter.png")
-gwmr_scatter_webp <- sub("\\.png$", ".webp", gwmr_scatter)
-gwmr_use <- ifelse(file.exists(gwmr_scatter_webp), gwmr_scatter_webp, gwmr_scatter)
-if (file.exists(gwmr_use)) {
-  cat("### Genome-wide MR: LDL-C → CAD\n")
-  cat("![](", gwmr_use, ")\n", sep="")
-}
+```{r gwmr-fig, results='asis'}
+# show_figs() inlines as base64 (and prefers the .webp sibling) — a markdown/
+# include_graphics path cannot be used here, see the note on the helper above.
+show_figs(file.path("results/mr", "LDL_C.CAD.scatter.png"), cols = 1)
 ```
+
+*Genome-wide MR of LDL-C on CAD. Each point is a pruned instrument: per-allele effect on
+LDL-C (x) against effect on CAD (y); the fitted slope is the IVW causal estimate.*
 
 **Genome-wide result — the positive control lands.** Across
 `r if (exists("gwmr") && !is.null(gwmr) && nrow(gwmr)) gwmr$nsnp[1] else "the"`
@@ -869,19 +875,18 @@ show_figs(sm@input$cismr_forest)
 ```
 
 
-```{r cismr-fig, results='asis', fig.width=10, fig.height=8}
-cismr_plot <- file.path("results/mr", "LDL_C.CAD.cismr.png")
-cismr_plot_webp <- sub("\\.png$", ".webp", cismr_plot)
-cismr_use <- ifelse(file.exists(cismr_plot_webp), cismr_plot_webp, cismr_plot)
-if (file.exists(cismr_use)) {
-  cat("### cis-MR results: effect estimates and pleiotropy checks\n")
-  cat("![](", cismr_use, ")\n", sep="")
-  cat("\nMR-Egger directional pleiotropy test: PCSK9 (intercept P = 0.94), LDLR (P = 0.28) show no\n")
-  cat("evidence of pleiotropy. HMGCR (P = 0.046) and NPC1L1 (P = 0.033) show nominal intercepts,\n")
-  cat("but with only 10 and 5 instruments the Egger test has low power — these are flags to note,\n")
-  cat("not grounds to overturn the IVW estimates.\n")
-}
+```{r cismr-fig, results='asis'}
+show_figs(file.path("results/mr", "LDL_C.CAD.cismr.png"), cols = 1)
 ```
+
+*Per-gene cis-MR estimates for the LDL drug-target genes, each instrumented only from its
+own ±200 kb window.*
+
+MR-Egger is the directional-pleiotropy check on each gene's instrument set. PCSK9
+(intercept P = 0.94) and LDLR (P = 0.28) show no evidence of directional pleiotropy. HMGCR
+(P = 0.046) and NPC1L1 (P = 0.033) carry nominal intercepts, but with only 10 and 5
+instruments respectively the Egger test is weakly powered — these are flags to record, not
+grounds to overturn the IVW estimates.
 
 **cis-MR result.** All four regions produced positive cis-IVW estimates with confidence intervals
 above the null: PCSK9 OR = 2.25 (2.02–2.51, \(P=6.5\times10^{-50}\)), LDLR OR = 2.02
