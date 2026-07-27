@@ -109,10 +109,9 @@ regional_one <- function(g) {
   print(bot, vp = grid::viewport(layout.pos.row = 2, layout.pos.col = 1))
   grid::popViewport()
   dev.off()
-  # Convert PNG to WebP (60-70% smaller, same quality)
+  # Create WebP copy (60-70% smaller, same quality) — keep PNG for Snakemake
   if (nzchar(Sys.which("cwebp"))) {
-    system(sprintf("cwebp -q 85 '%s' -o '%s' 2>/dev/null && rm '%s'",
-                   png_file, webp_file, png_file))
+    system(sprintf("cwebp -q 85 '%s' -o '%s' 2>/dev/null", png_file, webp_file))
   }
   invisible(TRUE)
 }
