@@ -644,6 +644,34 @@ rule report:
         cismr=expand("results/mr/{metab}.{outcome}.cismr.tsv",       metab=MR_METABOLITES, outcome=MR_OUTCOMES),
         cismr_forest=expand("results/mr/{metab}.{outcome}.cismr.png",   metab=MR_METABOLITES, outcome=MR_OUTCOMES)
     output: "report/report.html"
-    params: seed=config["params"]["seed"]
-    conda:  config["envs"]["r"]
-    script: "scripts/08_report.Rmd"
+    params:
+        seed=config["params"]["seed"],
+        r_env=config["envs"]["r"],                       # variantbench-r: rmarkdown+DT+pandoc
+        render="workflow/scripts/08_render_report.R"
+    # Self-bridging (like coloc/MR): NO `conda:` directive, so a bare
+    # `snakemake` from the `variantbench` env runs the whole pipeline
+    # top-to-bottom without `--use-conda` (which hangs on the conda solve
+    # here). The report is the only step whose toolchain (rmarkdown/DT/
+    # pandoc) lives solely in variantbench-r, so we `conda run -n` into it
+    # for just this render. We serialise the rule's REAL resolved inputs to
+    # JSON so the render script rebuilds the exact same snakemake@input the
+    # `script:` directive used to inject — zero path drift.
+    run:
+        import json, os, subprocess
+        os.makedirs("report", exist_ok=True)
+        # Named single-file inputs come back as str; expand() inputs as list.
+        # Normalise both to a list so the render script always sees a vector
+        # (never split a "path" string into characters).
+        def as_list(v):
+            return list(v) if isinstance(v, (list, tuple)) else [str(v)]
+        payload = {
+            "input":  {k: as_list(v) for k, v in input.items()},
+            "params": {"seed": params.seed},
+        }
+        with open("report/_report_inputs.json", "w") as fh:
+            json.dump(payload, fh, indent=2)
+        subprocess.run(
+            ["conda", "run", "-n", params.r_env, "--no-capture-output",
+             "Rscript", params.render,
+             "report/_report_inputs.json", output[0]],
+            check=True)

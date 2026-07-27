@@ -33,3 +33,4 @@ plink2.log
 *.bak
 .Rhistory
 report/report_*check*.html
+report/_report_inputs.json
