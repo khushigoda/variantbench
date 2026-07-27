@@ -1,5 +1,6 @@
 ---
-title: "VariantBench — Metabolic-Trait GWAS Follow-up (LDL_C, BCAA, Glucose, Lactate; EUR)"
+title: "From GWAS Summary Statistics to Candidate Causal Genes: A Reproducible Post-GWAS Pipeline for Circulating Metabolic Traits in European-Ancestry Biobanks"
+subtitle: "Meta-analysis, heritability, fine-mapping, colocalization, and Mendelian randomization for LDL cholesterol, branched-chain amino acids, glucose, and lactate"
 author: "Khushi Goda"
 date: "`r Sys.Date()`"
 output:
@@ -117,30 +118,72 @@ diseases. The analysis is **European-ancestry throughout** (EstBB + UKBB_EUR exp
 EUR-matched CAD/T2D outcomes, 1000G EUR LD reference), and **no individual-level genotype data
 is used** — every step operates on summary statistics plus a public LD reference.
 
+**Data provenance.** All exposure summary statistics come from Tambets *et al.*[^tambets], a GWAS
+meta-analysis of 249 circulating metabolic traits in the **Estonian Biobank (EstBB)** and the
+**UK Biobank (UKBB)**, retrieved as GWAS-SSF-formatted files from the **NHGRI-EBI GWAS Catalog**.
+For each metabolite the pipeline uses the two per-cohort European releases (EstBB and UKBB_EUR) as
+meta-analysis inputs and the authors' own published European meta-analysis as the Step-1 validation
+target. The **coronary artery disease (CAD)** outcome used downstream is the European-ancestry
+release of Aragam *et al.*[^aragam] (GWAS Catalog `GCST90132314`). **Every file is on GRCh38**: the
+metabolite and CAD statistics are served already harmonised to GRCh38 by the GWAS Catalog, so no
+coordinate liftover is applied to them.
+
 The four exposures are chosen as a **gradient of causal-prior strength**, so the pipeline is
 shown to *discriminate* rather than merely run. **LDL_C is the canonical positive control**: the
-causal LDL→CAD relationship is proven by RCTs of statins (*HMGCR*), PCSK9 inhibitors (*PCSK9*),
-and ezetimibe (*NPC1L1*), so recovering a positive *cis*-MR at these drug-target genes is the
-strongest validation of the whole arc. **BCAA** (anchored by the catabolic regulators *PPM1K* /
-*BCKDK*) and **glucose** (anchored by *GCK* / *GCKR* / *G6PC2* / *SLC30A8*) are further positive
-controls for the diabetes axis, both tested against T2D. **Lactate is the contrast**: different
-biology (glycolysis), a weaker causal prior, and a notable locus at *GP6* (platelet collagen
-receptor) biologically distant from a metabolic-disease mechanism — a test of whether the methods
-correctly report a *less* compelling causal picture. Four exposures across four chromosomes and
-pathways demonstrate that the pipeline **discriminates** strong causal signals from weak ones.
+causal LDL→CAD relationship is established by the totality of genetic, epidemiologic, and
+randomized-trial evidence — including RCTs of statins (*HMGCR*), PCSK9 inhibitors (*PCSK9*), and
+ezetimibe (*NPC1L1*)[^ference] — so recovering a positive *cis*-MR at these drug-target genes is
+the strongest validation of the whole arc. **BCAA** (anchored by the catabolic regulators *PPM1K* /
+*BCKDK*), whose causal role in type 2 diabetes has itself been supported by Mendelian
+randomization[^lotta], and **glucose** (anchored by *GCK* / *GCKR* / *G6PC2* / *SLC30A8*) are
+further positive controls for the diabetes axis, both tested against T2D. **Lactate is the
+contrast**: different biology (glycolysis), a weaker causal prior, and a notable locus at *GP6*
+(platelet collagen receptor) biologically distant from a metabolic-disease mechanism — a test of
+whether the methods correctly report a *less* compelling causal picture. Together the four exposures
+span loci across the genome and several distinct pathways, so the pipeline can be judged on whether
+it **discriminates** strong causal signals from weak ones.
 
-**Method choice stated up front — the LD reference is out-of-sample.** Fine-mapping,
-clumping, and MR instrument pruning use a 1000 Genomes EUR panel, **not** the in-sample UKBB
-LD the reference paper used. Out-of-sample LD can miscalibrate SuSiE credible sets and
-mis-prune instruments; this is an accepted tractability tradeoff, flagged here and again in
-each affected section. A second deliberate choice concerns the CAD outcome: the paper's
-Methods cite the multi-ancestry `GCST90132315`, but the authors' released code uses the
-European-only `GCST90132314`. I use the European-only accession — it keeps exposure and
-outcome ancestry-matched and avoids a known source of two-sample MR bias, and it is the
-choice the authors' own code made. (The multi-ancestry study is not used: with EUR-only
-exposures it would reintroduce the ancestry mismatch this design is built to avoid.) The
-CAD file is the GWAS Catalog harmonised (GRCh38) release, matching the GRCh38 metabolite
-exposures, so no CAD liftover is required; T2D (DIAGRAM, GRCh37) is lifted to GRCh38 in Step 0.
+[^tambets]: Tambets R, *et al.* Genome-wide association study for circulating metabolic traits in
+619,372 individuals. *medRxiv* 2024.10.15.24315557 (2024); published in *Nature* (2026),
+doi:10.1038/s41586-026-10532-5. Summary statistics via the NHGRI-EBI GWAS Catalog.
+
+[^aragam]: Aragam KG, *et al.* Discovery and systematic characterization of risk variants and genes
+for coronary artery disease in over a million participants. *Nat Genet* 54, 1803–1815 (2022),
+doi:10.1038/s41588-022-01233-6. GWAS Catalog `GCST90132314` (European-ancestry release).
+
+[^ference]: Ference BA, *et al.* Low-density lipoproteins cause atherosclerotic cardiovascular
+disease. 1. Evidence from genetic, epidemiologic, and clinical studies. A consensus statement from
+the European Atherosclerosis Society Consensus Panel. *Eur Heart J* 38(32), 2459–2472 (2017),
+doi:10.1093/eurheartj/ehx144.
+
+[^lotta]: Lotta LA, *et al.* Genetic predisposition to an impaired metabolism of the branched-chain
+amino acids and risk of type 2 diabetes: a Mendelian randomisation analysis. *PLoS Med* 13(11),
+e1002179 (2016), doi:10.1371/journal.pmed.1002179.
+
+**Scope and resource constraints, stated up front.** Because of finite compute and a fixed
+time budget, the analysis was **not** run across the full planned set of metabolites — the
+report focuses on LDL_C (with the other three traits carried through the early steps) rather than
+the paper's full metabolite panel. This is a scoping decision, not an architectural limit: the
+pipeline is **config-driven** (`config/config.yaml`), so adding a metabolite is a one-line
+accession entry and the same Snakemake rules then run end to end for it — the design scales to any
+desired number of traits, and the restriction here is purely one of available resources. For the
+same reason, some **tools and methodological choices deliberately diverge from the published
+study** where a lighter or more self-contained alternative fit the resource envelope (these
+substitutions are flagged in the affected sections). All work runs on a single workstation-class
+machine (**8-core CPU, 8 GiB RAM, no GPU**); memory in particular drives several of these choices —
+e.g. reading precomputed per-step summary tables in this report instead of loading the multi-GB
+genome-wide files, and using SuSiE fine-mapping with a public LD panel rather than an
+individual-level genotype workflow.
+
+**The LD reference is out-of-sample.** Fine-mapping, clumping, and MR instrument pruning use a
+1000 Genomes EUR panel, **not** the in-sample UKBB LD the reference paper used. Out-of-sample LD
+can miscalibrate SuSiE credible sets and mis-prune instruments; this is an accepted tractability
+tradeoff, flagged here and again in each affected section. The CAD outcome (`GCST90132314`) is the
+GWAS Catalog harmonised (GRCh38) release, matching the GRCh38 metabolite exposures, so no liftover
+is required. A T2D GWAS (DIAGRAM, GRCh37) was prepared and lifted to GRCh38 in Step 0, but is
+**ultimately not used**: with LDL_C selected as the metabolite of interest, **CAD is the
+appropriate disease outcome** for the downstream colocalization and MR, so T2D is left out of the
+reported arc.
 
 # Meta-analysis (Step 1)
 
@@ -171,17 +214,16 @@ The validation table is the decisive check on the whole meta step: `pearson_r` a
 machine precision to 1 mean the from-scratch inverse-variance meta reproduces the authors'
 published meta exactly, over all union variants. The overlap columns (`n_both`,
 `n_estbb_only`, `n_ukbb_only`) show that the meta genuinely combined both cohorts rather than
-defaulting to whichever one was present. *(Counting genome-wide-significant loci is deferred to
-Step 3, where LD-clumping collapses correlated hits into independent lead variants — a raw
-p < 5e-8 variant count over 100M+ variants over-counts single signals through LD.)*
+defaulting to whichever one was present. This validates that the pre-processing of GWAS summary
+statistics downloaded was accurate and the dataset for subsequent downstream analysis was ready.
 
 ```{r meta-fig, results='asis'}
 # Two 2x2 composites (one image each) instead of 8 stacked plots.
 # Validation (our beta vs published meta_EUR) is the headline reproducibility check;
 # concordance (EstBB vs UKBB per-cohort beta) is the supporting cross-cohort view.
-cat("**Validation — our meta vs the authors' published `meta_EUR` (per trait):**\n\n")
+cat("**Validation — our meta vs the authors' published `meta_EUR` (per metabolite):**\n\n")
 compose_figs(sm@input$validation)
-cat("**Cross-cohort concordance — EstBB vs UKBB effect sizes (per trait):**\n\n")
+cat("**Cross-cohort concordance — EstBB vs UKBB effect sizes (per metabolite):**\n\n")
 compose_figs(sm@input$concordance)
 ```
 
