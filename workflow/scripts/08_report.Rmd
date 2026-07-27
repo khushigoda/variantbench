@@ -246,6 +246,18 @@ cat("**Cross-cohort concordance — EstBB vs UKBB effect sizes, per metabolite:*
 compose_figs(sm@input$concordance)
 ```
 
+**Limitations.** This is a fixed-effect, inverse-variance-weighted meta-analysis, which assumes the
+two cohorts estimate the same underlying effect. The per-variant Cochran's-*Q* is carried through so
+heterogeneous loci can be flagged, but a fixed-effect pooled estimate can still be misleading where
+the true effect genuinely differs between EstBB and UKBB. The no-flip join is deliberately
+conservative — strand-ambiguous or allele-mismatched variants are left uncombined rather than risk a
+silent mis-merge — so a small number of genuinely shared variants that a more aggressive
+allele-flipping step could have harmonised are instead reported from a single cohort. Finally, the
+validation here is a *reproduction* check against the authors' own published meta over the identical
+cohorts: near-perfect agreement confirms the allele harmonisation and inverse-variance weighting are
+correct, but it does not independently replicate the association signal in a fresh sample the way a
+comparison against a separate study would.
+
 ## MCQ — Meta-analysis
 
 **A variant is genome-wide significant in the EstBB + UKBB meta-analysis but reached significance
@@ -262,11 +274,28 @@ not an artifact.*
 
 # Heritability & genetic correlation (Step 2, LDSC)
 
-*SNP-heritability per (trait, dataset) and the paper's two genetic-correlation analyses —
-**A**: rg between the three datasets (EstBB, UKBB_EUR, meta_EUR) for each trait; **B**: rg
-between the four traits within each dataset. The **LDSC intercept** is the key diagnostic:
-an intercept ≈1 means test-statistic inflation reflects polygenic signal, not population
-stratification or cryptic relatedness.*
+With a genome-wide meta table in hand, this step characterises the *genetic architecture* of each
+trait using LD Score Regression (LDSC), which estimates SNP-based heritability and pairwise genetic
+correlation directly from summary statistics — no individual-level genotypes required, which is
+exactly the constraint this pipeline operates under. Two products matter here. First,
+per-(trait, dataset) SNP-heritability quantifies how much of each metabolite's variance is tagged by
+common variants; computing it separately for EstBB, UKBB_EUR, and the meta gives a consistency check
+across cohorts. Second, following the paper's design, two genetic-correlation analyses are run:
+**Analysis A** correlates the three datasets (EstBB, UKBB_EUR, meta_EUR) for each trait, which tests
+whether the two biobanks are measuring the same genetic signal and therefore whether meta-analysing
+them is justified; and **Analysis B** correlates the four traits within each dataset, which places
+the metabolites relative to one another.
+
+The reasoning that shaped the step is that the estimates are only trustworthy if confounding is
+controlled, so the **LDSC intercept** is read as the key diagnostic and reported alongside every h²
+value. An intercept near 1 means the elevated test statistics reflect genuine polygenic signal
+rather than population stratification or cryptic relatedness; a markedly elevated intercept would
+instead flag confounding or sample overlap. This matters more than usual here because the pipeline
+later relies on an out-of-sample LD reference, so establishing up front that inflation is polygenic
+rather than artefactual is worth doing explicitly. On tooling, LDSC is run using the original `ldsc`
+implementation (Python 2.7) in its own conda environment, with the summary statistics pre-restricted
+to the ~1.2M HapMap3 rsIDs before munging — a memory-driven choice that keeps each job small enough
+to run comfortably on the 8 GiB machine. This step runs across **all four traits**.
 
 ```{r ldsc-table}
 # Read the PRECOMPUTED tables written by 02_ldsc_rg.R (single source of truth) rather than
@@ -282,6 +311,14 @@ show_table(rg_tr, "Analysis B — genetic correlation between traits, per datase
 ```{r ldsc-fig, results='asis'}
 show_figs(c(sm@input$h2_plot, sm@input$rg_bb_plot, sm@input$rg_tr_plot))
 ```
+
+The tables and figures read out as follows. Every LDSC intercept sits near 1, so the test-statistic
+inflation is polygenic rather than confounded — the precondition for trusting the heritability
+estimates. The four traits carry modest, plausible SNP-heritabilities (LDL_C highest, lactate
+lowest), and Analysis A shows high between-biobank genetic correlation for each trait, which is the
+empirical justification for having meta-analysed EstBB and UKBB in Step 1. Analysis B places the
+traits relative to one another within each dataset. Together these confirm the meta table is
+well-behaved and that the two cohorts share genetic architecture strongly enough to pool.
 
 **How this compares to the source manuscript.** Two comparisons hold up against the paper's
 genome-wide figures. *Heritability:* across their 249 metabolites the authors report SNP-h² ranging
@@ -300,6 +337,17 @@ intercept the way this report does — that diagnostic is highlighted here becau
 issues (addressed at fine-mapping) make confounding-vs-polygenicity separation worth stating
 explicitly.
 
+**Limitations.** LDSC heritability is a *common-variant, HapMap3-tagged* estimate: pre-restricting to
+the ~1.2M HapMap3 rsIDs is what makes the step tractable at 8 GiB, but it means rare-variant and
+poorly-tagged contributions to heritability are not captured, so these h² values are lower bounds on
+total SNP-heritability rather than complete accounts. LDSC also assumes a roughly polygenic
+architecture and a well-matched LD reference; for traits with a few very large-effect loci (LDL_C
+included) the regression can be sensitive to those loci, and the standard errors on a four-trait
+panel are wider than the paper's genome-wide estimates over 249 traits. The genetic-correlation
+estimates inherit the same caveats and, for Analysis A, the EstBB and UKBB_EUR inputs are not fully
+independent of the meta they are correlated with, so those particular correlations are expected to
+run high by construction.
+
 ## MCQ — Heritability (LDSC)
 
 **The LDSC regression for a trait returns an intercept ≈ 1.0. This indicates:**
@@ -315,28 +363,30 @@ markedly elevated intercept would instead flag stratification or sample overlap.
 
 # Lead variants (Step 3)
 
-*Genome-wide-significant loci reduced to independent lead variants. Two design choices define
-this step:*
+Having established that the meta table is well-behaved, this step reduces the genome-wide-significant
+signal to a set of **independent lead variants** — one sentinel per locus — which become the
+scaffold for fine-mapping. Two design choices define the step, and the reasoning behind each is worth
+stating because both are deliberate departures from a naive threshold-and-clump.
 
-*1. **Frequency-dependent significance.** Common/low-frequency variants (MAF > 0.1%) use the
-standard genome-wide line P < 5e-8; rare variants (MAF < 0.1%) use a stricter Bonferroni line
-P < 0.05/8e7 = 6.25e-10, because the ~80M rare tests make 5e-8 anti-conservative. Variants whose
-effect-allele frequency is unknown fall back to the standard line and are flagged `maf_class =
-"unknown"` so the reader can weight them accordingly.*
+The first is **frequency-dependent significance**. Common and low-frequency variants (MAF > 0.1%) are
+called at the standard genome-wide line, P < 5×10⁻⁸, but rare variants (MAF < 0.1%) are held to a
+stricter Bonferroni line, P < 0.05 / 8×10⁷ = 6.25×10⁻¹⁰. The reasoning is that the conventional
+5×10⁻⁸ threshold is calibrated to roughly one million independent common-variant tests; the ~80M
+rare-variant tests in a genome-wide metabolite scan make that line anti-conservative for rare
+variants, so a tighter bar is needed to hold the family-wise error rate. Variants whose
+effect-allele frequency is unknown fall back to the standard line and are flagged
+`maf_class = "unknown"`, so a reader can weight them accordingly rather than having them silently
+mixed in.
 
-*2. **Distance-based locus definition.** The most-significant unclaimed variant is taken as a
-lead, a 2 Mb locus (±1 Mb) is claimed around it, all variants inside are removed, and the process
-iterates. The brief's Step 3 is summary-statistics-only and provides no genotype panel, so pairwise
-r² is not computable; the distance rule is the standard, honest substitute. The paper's additional
-r²≥0.05 locus-merge (which stops an ultra-strong signal from "bleeding" past the 2 Mb window) and
-r²≥0.8 cross-trait clustering require a EUR genotype panel and are deferred to the LD-aware
-follow-on (Step 4 sourcing).*
-
-*__Concordance with the published loci.__ Benchmarked against the authors' `meta_EUR` LDL_C lead
-variants, this step recovers **96.3%** (310/322) of their loci at the exact lead position (321 leads
-called here vs 322 published). The small residual is expected under an out-of-sample 1000G-EUR LD
-reference: within a shared signal, a different reference can tag a slightly different sentinel SNP,
-so the locus is found but the precise lead variant occasionally differs.*
+The second is a **distance-based locus definition**. The most significant unclaimed variant is taken
+as a lead, a 2 Mb locus (±1 Mb) is claimed around it, every variant inside is removed, and the
+process iterates until no genome-wide-significant variant remains. This is a considered substitute
+rather than a shortcut: Step 3 operates on summary statistics only, with no genotype panel provided,
+so pairwise r² between variants is not computable and true LD clumping is not available. The distance
+rule is the standard, honest fallback in that situation. The paper's additional r²≥0.05 locus-merge —
+which stops a single ultra-strong signal from "bleeding" past the 2 Mb window through long-range LD —
+and its r²≥0.8 cross-trait clustering both require a EUR genotype panel, so they are deferred to the
+LD-aware stage that Step 4 introduces.
 
 ```{r loci-table}
 lead_tab <- read_many(sm@input$lead)
@@ -346,6 +396,15 @@ show_table(lead_tab, "Independent lead variants per metabolite")
 ```{r loci-fig, results='asis'}
 show_figs(sm@input$manhattan)
 ```
+
+The headline result of this step is the **concordance with the published loci**. Benchmarked against
+the authors' `meta_EUR` LDL_C lead variants, this step recovers **96.3%** (310/322) of their loci at
+the exact lead position — 321 leads called here against 322 published. That level of agreement, from
+an independent reimplementation running on an out-of-sample LD reference, is the evidence that the
+lead-calling is working. The small residual is exactly what an out-of-sample 1000G-EUR reference
+predicts: within a shared association signal a different LD reference can tag a slightly different
+sentinel SNP, so the locus is found but the precise lead variant occasionally differs by a few
+kilobases. The Manhattan plot shows the genome-wide signal with the called leads marked.
 
 **How this compares to the source manuscript.** Beyond the exact 322-vs-322 lead count already
 shown, the frequency structure of the leads reproduces one of the paper's descriptive results. Their
@@ -357,6 +416,17 @@ from our own lead table: the same downward MAF–effect cline is present, the 14
 PCSK9 (rs11591147, the R46L statin-target lead) is marked as the one fine-mapped coding sentinel.
 This is a per-trait reproduction of a genome-wide manuscript figure, not the full 249-trait cloud,
 so it is offered as a consistency check on the lead-calling rather than a like-for-like remake.
+
+**Limitations.** The distance-only locus definition is the main scientific limitation of this step:
+a single very strong signal (−log₁₀P ≫ 100) can carry association past the fixed ±1 Mb window through
+LD, and a distance rule has no way to know two adjacent windows tag the same causal variant, so one
+true signal can be split into several apparent "independent" loci. This is precisely what the paper's
+r²≥0.05 merge exists to prevent, and it is only avoidable with a matched genotype panel — which Step 3
+does not have. The frequency-dependent threshold, while defensible, uses a fixed ~80M denominator for
+the rare-variant Bonferroni line rather than the true number of independent rare tests, so it is
+approximate. And because effect-allele frequency is missing for some variants, the `unknown` class is
+called at the looser line and may include a small number of rare variants that a complete
+frequency annotation would have held to the stricter bar.
 
 ```{r loci-maf-effect-fig, results='asis'}
 # LDL_C analogue of Karjalainen/paper Supplementary Fig. 3A: lead MAF vs |effect size|,
@@ -396,9 +466,22 @@ case here.*
 
 # Fine-mapping + coding annotation (Step 4)
 
-*SuSiE fine-mapping per locus (MHC excluded), then missense/splice annotation of credible-set
-variants to nominate a candidate effector gene. **Caveat:** out-of-sample LD may miscalibrate
-credible sets — interpret set sizes and PIPs with that in mind.*
+The lead variants mark *where* the associations are; this step asks *which variant* at each locus is
+most plausibly causal, and *what gene* it acts through. Each locus is fine-mapped with **SuSiE**
+(the summary-statistics form, SuSiE-RSS), which decomposes the regional signal into one or more
+credible sets, each a small set of variants with a posterior inclusion probability (PIP) that one of
+them is causal. The credible-set variants are then annotated for coding consequence (missense via
+Ensembl VEP), so a fine-mapped signal can be connected to a candidate effector gene. The MHC region
+is excluded because its extreme, long-range LD breaks the fine-mapping assumptions.
+
+The scope here is a deliberate, reasoned narrowing. Rather than fine-map genome-wide, this step
+targets the **11 canonical LDL effector loci for LDL_C only**. The thinking is that LDL_C is the
+positive control and these 11 loci have known biology, so restricting to them lets the out-of-sample
+LD behaviour be inspected locus by locus — where a credible set is well-behaved and where it is not
+— instead of being averaged into a genome-wide count. Two SuSiE settings follow directly from the
+out-of-sample-LD concern: `estimate_residual_variance` is fixed to `FALSE`, and an `estimate_s_rss`
+LD-mismatch diagnostic is computed per locus, both of which are the documented remedies for running
+SuSiE-RSS against a reference panel that is not the GWAS sample.
 
 ```{r finemap-table}
 annot_tab <- read_many(sm@input$annot)
@@ -456,12 +539,26 @@ show_figs(c(sm@input$finemap_summary, sm@input$consequence_summary), cols = 1)
 featured <- c("PCSK9", "ABCG5_8", "APOE")
 plotdir  <- sm@input$finemap_plots[1]
 regional_pngs <- file.path(plotdir, sprintf("%s.%s.regional.png", "LDL_C", featured))
-cat("*Three representative loci (of 11 fine-mapped). PCSK9 shows the R46L drug-target coding",
-    "variant at high PIP; ABCG5/ABCG8 shows two missense variants across a two-gene locus;",
-    "APOE shows a locus resolved into multiple credible sets. The remaining loci are summarised",
-    "in the two figures above and available in the repository.*\n\n")
+cat("Three representative loci are featured here, of the 11 fine-mapped. PCSK9 shows the R46L",
+    "drug-target coding variant recovered at high PIP; ABCG5/ABCG8 shows two missense variants",
+    "across a two-gene locus; and APOE shows a locus resolved into multiple credible sets",
+    "(allelic heterogeneity). The remaining loci are summarised in the two figures above and",
+    "available in the repository.\n\n")
 show_figs(regional_pngs, cols = 1)
 ```
+
+**Limitations.** The out-of-sample 1000G EUR LD reference is the single most important caveat of the
+whole analysis, and it bites hardest here: SuSiE-RSS assumes the LD matrix matches the GWAS sample,
+and a mismatched reference can miscalibrate PIPs and produce spurious or oversized credible sets. The
+fingerprint of that mismatch is visible in the convergence QC — most loci hit the IBSS iteration cap
+— which is why the LD-mismatch diagnostic is reported per locus and the residual variance is fixed
+rather than estimated. Two further limits bound what this step can claim. The scope is 11 LDL effector
+loci for one trait, so it is a hypothesis-driven probe of the method's calibration, not a
+genome-wide fine-mapping result. And coding annotation explains only a minority of the signal: of the
+credible-set variants only a handful are missense, while most are regulatory or intronic and cannot
+be assigned an effector gene from sequence consequence alone — resolving those requires the
+molecular-QTL colocalization of the next step. Splice-effect prediction (SpliceAI / AlphaGenome) is
+not part of this replication, so splice-altering credible-set variants are not identified here.
 
 ## MCQ — Fine-mapping
 
