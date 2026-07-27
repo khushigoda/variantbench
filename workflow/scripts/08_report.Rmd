@@ -834,7 +834,70 @@ direction reproduce the manuscript's headline MR conclusion that LDL-C is causal
 canonical effector genes are bona fide drug targets, from an independent implementation on the
 replication meta-analysis.
 
-## MCQ — Mendelian randomization
+## Step 6 — Genome-wide Mendelian randomization
+
+**Question: Does LDL-C causally influence CAD (or T2D)? What does a significant genome-wide MR
+estimate tell us, and why is this design different from observational associations?**
+
+Genome-wide MR tests whether variation in a **trait** (LDL-C) that is *genetically instrumented* causally
+influences an **outcome** (CAD or T2D). All variants genome-wide that pass pruning (r²<0.001 against
+1000G-EUR) are used as instruments, provided they reach genome-wide significance in the exposure GWAS.
+The multiplicative random-effects IVW estimator is applied, which inflates standard errors under
+heterogeneity — a form of robustness against unmeasured pleiotropy (variants affecting outcome through
+pathways other than LDL). For LDL-C → CAD, we observe **OR 1.66 per SD increase in LDL-C** — evidence
+that elevated LDL-C is causal for coronary disease, not merely associated. This is the first key
+validation that LDL is a bona fide causal target for therapeutic intervention.
+
+```{r gwmr-fig, results='asis', fig.width=10, fig.height=6}
+gwmr_scatter <- file.path("results/mr", "LDL_C.CAD.scatter.png")
+gwmr_scatter_webp <- sub("\\.png$", ".webp", gwmr_scatter)
+gwmr_use <- ifelse(file.exists(gwmr_scatter_webp), gwmr_scatter_webp, gwmr_scatter)
+if (file.exists(gwmr_use)) {
+  cat("### Genome-wide MR: LDL-C → CAD\n")
+  cat("![](", gwmr_use, ")\n", sep="")
+}
+```
+
+---
+
+## Step 7 — Cis Mendelian randomization (drug-target validation)
+
+**Question: What does cis-MR establish that genome-wide MR cannot, and why is it the more robust design
+for validating individual drug targets?**
+
+Cis-MR is the natural complement to genome-wide MR: instead of aggregating instruments from across the
+genome to test the trait, we restrict instruments to a ±200 kb window around a *single* candidate drug-target
+gene. The logic is that variants in the cis window of (say) PCSK9 act on LDL-C primarily through PCSK9's
+effect, not through thousands of independent loci. This design is therefore largely **immune to genome-wide
+horizontal pleiotropy** by construction — we are testing the causal effect of *that gene's* contribution
+to LDL, which is exactly the intervention a drug targeting it would perform.
+
+The critical insight is that cis-MR and genome-wide MR answer *different* questions:
+- **Genome-wide MR**: Does the *trait* (LDL-C) cause disease?
+- **cis-MR**: Does *this gene's* effect on the trait cause disease?
+
+For drug development, cis-MR is the more relevant question. Two of our findings highlight this:
+**LDLR and NPC1L1 failed to colocalize with eQTLs** in Step 5 (their molecular QTLs were not
+associated in any tissue tested), yet both show **overwhelming causal support in cis-MR**
+(LDLR P = 9.6×10⁻⁷⁷, NPC1L1 P = 5.9×10⁻¹⁴). This illustrates why the two lines of evidence are run
+together: a colocalization null reflects tissue/power limitation, not evidence against a gene. cis-MR —
+which needs only GWAS summary statistics, no molecular QTL — supplies the causal evidence coloc could not.
+
+```{r cismr-fig, results='asis', fig.width=10, fig.height=8}
+cismr_plot <- file.path("results/mr", "LDL_C.CAD.cismr.png")
+cismr_plot_webp <- sub("\\.png$", ".webp", cismr_plot)
+cismr_use <- ifelse(file.exists(cismr_plot_webp), cismr_plot_webp, cismr_plot)
+if (file.exists(cismr_use)) {
+  cat("### cis-MR results: effect estimates and pleiotropy checks\n")
+  cat("![](", cismr_use, ")\n", sep="")
+  cat("\nMR-Egger directional pleiotropy test: PCSK9 (intercept P = 0.94), LDLR (P = 0.28) show no\n")
+  cat("evidence of pleiotropy. HMGCR (P = 0.046) and NPC1L1 (P = 0.033) show nominal intercepts,\n")
+  cat("but with only 10 and 5 instruments the Egger test has low power — these are flags to note,\n")
+  cat("not grounds to overturn the IVW estimates.\n")
+}
+```
+
+**MCQ — Why cis-MR, not just genome-wide MR?**
 
 **Genome-wide MR shows LDL-C is causal for CAD (OR 1.66/SD). We nonetheless also run cis-MR
 restricted to a ±200 kb window around each drug-target gene. What does the cis analysis establish
@@ -846,19 +909,14 @@ question?**
 - C. cis-MR proves the drug is safe and effective in patients.
 - D. A significant genome-wide MR guarantees every LDL-lowering drug target will also be significant in cis-MR, so the cis step is redundant.
 
-*Answer: **B.** Genome-wide MR aggregates instruments from across the genome to test whether the
-**trait** (LDL-C) is causal; its instruments can influence CAD through pathways other than LDL
-(horizontal pleiotropy), which is why sensitivity estimators exist for it. cis-MR asks a different,
-narrower question: restrict the instruments to the immediate neighbourhood of a single gene, and the
-estimate reflects perturbation of **that gene's** effect on LDL — exactly the intervention a drug
-targeting it performs. Confining instruments to the cis window makes the analysis robust to
-genome-wide pleiotropy by construction (variants near, say, PCSK9 act on LDL through PCSK9), which is
-why cis-MR is the standard genetic tool for anticipating drug-target efficacy. It is **not** merely a
-downsized genome-wide analysis (A): the two answer different questions, and cis-MR's value here is
-starkest at **LDLR and NPC1L1**, which failed to colocalize in Step 5 yet are strongly causal in
-cis-MR. It does not establish clinical safety or efficacy in patients (C) — that needs trials — and a
-causal trait does not guarantee every candidate target validates (D); each target must be tested on
-its own cis instruments.*
+*Answer: **B.** The two analyses answer complementary but distinct questions. Genome-wide MR tests
+whether variation in the **trait** is causal; cis-MR tests whether variation in a **specific gene's** effect
+on the trait is causal — the mechanism a drug would target. By restricting instruments to the cis region,
+cis-MR is robust to genome-wide pleiotropy by construction. It is **not** merely a downsized version (A):
+the two are designed for different purposes, and cis-MR's power and insight are starkest at **LDLR and
+NPC1L1**, which did not colocalize with eQTLs yet are overwhelmingly causal in cis. cis-MR does not
+prove clinical efficacy in patients (C) — that requires trials — and a causal trait does not guarantee
+every candidate target validates (D); each gene must be tested on its own cis instruments.*
 
 # Limitations
 
