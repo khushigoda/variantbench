@@ -224,6 +224,18 @@ combined both cohorts rather than defaulting to whichever one was present. Toget
 that the summary-statistic pre-processing was accurate and the genome-wide table is ready for the
 downstream steps.
 
+**How this compares to the source manuscript.** The reproduced European meta-analysis pools the
+same two cohorts the authors describe — EstBB (n ≈ 185,352) and UKBB_EUR (n ≈ 413,897) — into a
+`meta_EUR` of **n = 599,249**, matching the published sample size exactly. The validation scatter
+here plays the same role as the manuscript's Supplementary Fig. 2, which regresses shared
+lead-variant betas from their `meta_EUR` against a prior published analysis (Karjalainen et al.)
+and reports near-perfect concordance where the samples overlap. The comparison differs in one
+honest respect: the manuscript benchmarks against an *external* study with only partial sample
+overlap, so their agreement is high but sub-unity; this replication benchmarks against the authors'
+*own* published `meta_EUR` over the identical cohorts, so `r` and slope sit at machine precision to
+1 — a reproduction check rather than a cross-study replication. Both confirm the same thing: allele
+harmonisation and inverse-variance weighting recover effect sizes that agree with the reference.
+
 ```{r meta-fig, results='asis'}
 # Two 2x2 composites (one image each) instead of 8 stacked plots.
 # Validation (meta_rep vs meta_og) is the headline reproducibility check;
@@ -270,6 +282,23 @@ show_table(rg_tr, "Analysis B — genetic correlation between traits, per datase
 ```{r ldsc-fig, results='asis'}
 show_figs(c(sm@input$h2_plot, sm@input$rg_bb_plot, sm@input$rg_tr_plot))
 ```
+
+**How this compares to the source manuscript.** Two comparisons hold up against the paper's
+genome-wide figures. *Heritability:* across their 249 metabolites the authors report SNP-h² ranging
+from 2.8% (acetoacetate) to 19.5% (HDL size), median **10.2%** (their Supplementary Table 3 /
+Supplementary Fig. 1). Our four traits fall inside that envelope — LDL_C at **11.75%** sits almost
+exactly on their median, with BCAA (6.5%), Glucose (5.1%) and Lactate (3.9%) toward the
+lower-heritability end, consistent with amino-acid and glycolysis metabolites being less heritable
+than cholesterol traits in their data. *Cross-biobank genetic correlation:* the manuscript reports a
+median r_g of **0.91** (mean 0.89) between EstBB and UKBB for matched metabolic traits, taking that
+high shared genetic architecture as justification for meta-analysing the two biobanks. Our
+between-biobank r_g (EstBB vs UKBB_EUR) is 0.85 (LDL_C), 0.83 (BCAA), 0.90 (Glucose) and 0.86
+(Lactate) — mean **0.86**, the same "largely shared effects" conclusion on the four traits we ran.
+The manuscript's estimate is a genome-wide median over 249 traits and ours a four-trait mean, so the
+small gap is expected; the biological read-out is identical. The paper does not emphasise the LDSC
+intercept the way this report does — that diagnostic is highlighted here because out-of-sample
+issues (addressed at fine-mapping) make confounding-vs-polygenicity separation worth stating
+explicitly.
 
 ## MCQ — Heritability (LDSC)
 
@@ -318,6 +347,23 @@ show_table(lead_tab, "Independent lead variants per metabolite")
 show_figs(sm@input$manhattan)
 ```
 
+**How this compares to the source manuscript.** Beyond the exact 322-vs-322 lead count already
+shown, the frequency structure of the leads reproduces one of the paper's descriptive results. Their
+Supplementary Fig. 3A plots lead-variant MAF against effect size across all `meta_EUR` locus–trait
+pairs and shows the canonical inverse relationship — rare variants carry large effects, common
+variants small ones — with point size scaled by −log₁₀P. The panel below is the LDL_C analogue built
+from our own lead table: the same downward MAF–effect cline is present, the 14 rare leads
+(MAF < 0.1%) occupy the high-effect corner, and the 307 common leads compress toward small effects.
+PCSK9 (rs11591147, the R46L statin-target lead) is marked as the one fine-mapped coding sentinel.
+This is a per-trait reproduction of a genome-wide manuscript figure, not the full 249-trait cloud,
+so it is offered as a consistency check on the lead-calling rather than a like-for-like remake.
+
+```{r loci-maf-effect-fig, results='asis'}
+# LDL_C analogue of Karjalainen/paper Supplementary Fig. 3A: lead MAF vs |effect size|,
+# point size = -log10 P, colour = frequency class. Built by 03_leadvars.R from the lead table.
+show_figs(sm@input$maf_effect)
+```
+
 ## MCQ — Lead variants
 
 **Step 3 calls lead variants with a frequency-dependent threshold: P < 5×10⁻⁸ for common variants
@@ -363,6 +409,23 @@ Only the credible-set variants annotated as **missense** are shown below — the
 candidates that fine-mapping nominates as potentially causal. The recovery of textbook LDL coding
 variants (PCSK9 R46L, APOE C130R) at PIP = 1 is the strongest validation that the pipeline works
 despite the out-of-sample LD.
+
+**How this compares to the source manuscript.** The authors fine-map genome-wide across all traits
+and report 116,467 credible sets, of which 31,392 (27%) resolve to 3,000 distinct putative causal
+variants at PIP > 0.8; these include 271 missense variants (Ensembl VEP) and 172 predicted
+splice-altering variants (their Supplementary Table 4). This replication is deliberately narrower:
+it fine-maps the 11 canonical LDL effector loci for LDL_C only — a hypothesis-driven subset chosen
+so out-of-sample-LD behaviour can be inspected locus by locus — yielding 68 credible-set variants at
+PIP > 0.8, of which 5 are missense (PCSK9 R46L, ABCG5 R198Q, ABCG8 T400K, APOB T98I, APOE C130R).
+The honest comparison is therefore one of *class membership*, not counts: our five coding candidates
+belong to the same missense class the manuscript catalogues genome-wide, and each is an established
+lipid effector variant, so recovering them at high PIP shows the fine-mapping mechanism is calibrated
+even though the scope is a fraction of the paper's. The manuscript's showcase example — a fine-mapped
+missense variant in BCAT2 (19-48806519-G-C, PIP = 1) that is also splice-altering and drives BCAA
+levels — sits outside our LDL_C scope and is not something this run reproduces; it is noted as
+context for the kind of coding+splicing dual mechanism the full analysis surfaces. Splice annotation
+(SpliceAI / AlphaGenome) is not part of this replication, so the paper's 172 splice-altering variants
+have no analogue here.
 
 ```{r finemap-missense}
 # Highlight the coding candidates. annot.tsv carries every credible-set variant; the missense

@@ -104,6 +104,7 @@ rule all:
         #   snakemake --cores 4 results/loci/{BCAA,Glucose,Lactate}.lead.tsv)
         expand("results/loci/{metab}.lead.tsv",      metab=config["ld_prep"]["finemap_metabolites"]),
         expand("results/loci/{metab}.manhattan.png", metab=config["ld_prep"]["finemap_metabolites"]),
+        expand("results/loci/{metab}.maf_effect.png", metab=config["ld_prep"]["finemap_metabolites"]),
         # Step 4a LD-matrix prep (only the traits configured for fine-mapping)
         expand("results/ld/{metab}.loci.tsv",        metab=config["ld_prep"]["finemap_metabolites"]),
         expand("results/ld/{metab}.ld_manifest.tsv", metab=config["ld_prep"]["finemap_metabolites"]),
@@ -260,7 +261,8 @@ rule lead_variants:
     input:  meta="results/meta/{metabolite}.meta.tsv.gz"
     output:
         lead="results/loci/{metabolite}.lead.tsv",
-        plot="results/loci/{metabolite}.manhattan.png"
+        plot="results/loci/{metabolite}.manhattan.png",
+        maf_effect="results/loci/{metabolite}.maf_effect.png"
     params:
         seed=config["params"]["seed"],
         gws_p=config["params"]["gws_p"],
@@ -511,6 +513,7 @@ rule report:
         # Step 3 — lead variants + Manhattan (fine-mapping trait only)
         lead=expand("results/loci/{metab}.lead.tsv",         metab=REPORT_FINEMAP),
         manhattan=expand("results/loci/{metab}.manhattan.png", metab=REPORT_FINEMAP),
+        maf_effect=expand("results/loci/{metab}.maf_effect.png", metab=REPORT_FINEMAP),
         # Step 4 — fine-mapping annotation + summary figures (fine-mapping trait only)
         annot=expand("results/finemap/{metab}.annot.tsv",              metab=REPORT_FINEMAP),
         finemap_summary=expand("results/finemap/{metab}.finemap_summary.png",     metab=REPORT_FINEMAP),

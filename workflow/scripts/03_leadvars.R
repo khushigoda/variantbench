@@ -169,3 +169,46 @@ if (nrow(lead_out)) {
 ggsave(snakemake@output$plot, pl, width = 11, height = 4.5, dpi = 130)
 message(sprintf("[%s] wrote %s + %s", trait,
                 basename(snakemake@output$lead), basename(snakemake@output$plot)))
+
+# ---- MAF vs |effect| scatter (analogue of Karjalainen et al. Supp. Fig. 3A) --------
+#   Shows the inverse allele-frequency/effect-size relationship: rare lead variants
+#   carry large effects, common leads small ones. Point size = -log10 P; colour = the
+#   frequency class used for the dual significance threshold. Only leads with a KNOWN
+#   MAF class enter (unknown-frequency leads are excluded, not silently binned).
+if (nrow(lead_out)) {
+  me <- lead_out[maf_class %in% c("common","rare") & is.finite(maf) & is.finite(beta) & maf > 0]
+  if (nrow(me)) {
+    me[, absbeta := abs(beta)]
+    me[, freq := factor(ifelse(maf_class=="rare","rare (MAF<0.1%)","common (MAF>0.1%)"),
+                        levels=c("common (MAF>0.1%)","rare (MAF<0.1%)"))]
+    # label PCSK9's R46L drug-target lead if it is itself a sentinel (it is, for LDL_C)
+    lab_me <- me[SNP == "rs11591147"]
+    if (nrow(lab_me)) lab_me[, gene := "PCSK9"]
+
+    p_me <- ggplot(me, aes(maf, absbeta)) +
+      geom_point(aes(size = neg_log10p, colour = freq), alpha = 0.6) +
+      scale_x_log10(breaks = c(1e-4,1e-3,1e-2,1e-1,0.5),
+                    labels = c("0.01%","0.1%","1%","10%","50%"),
+                    expand = expansion(mult = c(0.08, 0.05))) +
+      scale_size_continuous(range = c(0.6, 5), name = expression(-log[10](italic(P)))) +
+      scale_colour_manual(values = c("common (MAF>0.1%)"="#4C72B0","rare (MAF<0.1%)"="#DD8452"),
+                          name = NULL) +
+      labs(x = "Lead-variant minor allele frequency (log scale)",
+           y = expression("|effect size|  |"*beta*"|"),
+           title = sprintf("Rare %s lead variants carry larger effect sizes", trait),
+           subtitle = sprintf("meta_EUR (EstBB + UKBB_EUR); %d independent leads", nrow(me))) +
+      theme_bw(base_size = 11) +
+      theme(panel.grid.minor = element_blank(), legend.position = "right",
+            plot.title = element_text(face = "plain"))
+    if (nrow(lab_me)) {
+      p_me <- p_me +
+        geom_point(data = lab_me, aes(maf, absbeta), shape = 21, size = 2.6,
+                   colour = "black", fill = NA, stroke = 0.5, inherit.aes = FALSE) +
+        geom_text(data = lab_me, aes(maf, absbeta, label = gene), size = 3,
+                  fontface = "italic", vjust = -0.9, inherit.aes = FALSE) +
+        labs(subtitle = sprintf("meta_EUR (EstBB + UKBB_EUR); %d independent leads; PCSK9 = fine-mapped coding lead", nrow(me)))
+    }
+    ggsave(snakemake@output$maf_effect, p_me, width = 8, height = 5, dpi = 140)
+    message(sprintf("[%s] wrote %s", trait, basename(snakemake@output$maf_effect)))
+  }
+}
