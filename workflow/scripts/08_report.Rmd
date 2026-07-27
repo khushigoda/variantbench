@@ -304,10 +304,10 @@ shared biological association.
 
 **Two cohorts can be pooled for very different reasons: one cohort may simply dominate the result, or both may contribute evidence for the same underlying associations. Which description best matches the EstBB–UKBB_EUR analysis?**
 
-A. Most pooled LDL-C associations arose because large effects in EstBB compensated for effects in the opposite direction in UKBB_EUR.
-B. The cohorts generally supported effects in the same direction, and pooling strengthened a largely shared LDL-C association architecture.
-C. Pooling revealed that the two cohorts measured biologically different forms of LDL-C.
-D. The pooled results primarily reproduced variants observed only in UKBB_EUR, with minimal contribution from EstBB.
+- A. Most pooled LDL-C associations arose because large effects in EstBB compensated for effects in the opposite direction in UKBB_EUR.
+- B. The cohorts generally supported effects in the same direction, and pooling strengthened a largely shared LDL-C association architecture.
+- C. Pooling revealed that the two cohorts measured biologically different forms of LDL-C.
+- D. The pooled results primarily reproduced variants observed only in UKBB_EUR, with minimal contribution from EstBB.
 
 *Answer: **B.** The cross-cohort effect patterns are broadly concordant, and the independently
 reconstructed pooled effects match the published European meta-analysis. Together, those results
@@ -401,10 +401,10 @@ run high by construction.
 	vertical axis: reproducibility of genetic effects between EstBB and UKBB.
 Which map would match the results?**
 
-A. Lactate would have the strongest common-variant contribution, while LDL-C would show the weakest cross-cohort reproducibility.
-B. All four metabolites would occupy nearly the same position on both axes.
-C. BCAA and glucose would show high heritability but little shared genetic architecture between cohorts.
-D. LDL-C would rank highest and lactate lowest for common-variant heritability, while all four traits would remain relatively high on cross-cohort reproducibility.
+- A. Lactate would have the strongest common-variant contribution, while LDL-C would show the weakest cross-cohort reproducibility.
+- B. All four metabolites would occupy nearly the same position on both axes.
+- C. BCAA and glucose would show high heritability but little shared genetic architecture between cohorts.
+- D. LDL-C would rank highest and lactate lowest for common-variant heritability, while all four traits would remain relatively high on cross-cohort reproducibility.
 
 *Answer: **D.** The analysis places LDL-C at the highest and lactate at the lowest end of the four
 common-variant heritability estimates, while the consistently high EstBB–UKBB genetic correlations
@@ -494,10 +494,10 @@ show_figs(sm@input$maf_effect)
 
 **A follow-up study must choose one design based on the observed LDL-C lead-variant architecture. Which design is most consistent with the analysis?**
 
-A. Focus exclusively on Mendelian families because LDL-C appears to be governed mainly by rare, highly penetrant mutations.
-B. Increase common-variant GWAS sample size but exclude rare variants because their observed effects were negligible.
-C. Combine larger common-variant association studies with targeted sequencing or functional follow-up of rarer, larger-effect variants.
-D. Treat allele frequency as irrelevant because common and rare lead variants showed comparable effect-size distributions.
+- A. Focus exclusively on Mendelian families because LDL-C appears to be governed mainly by rare, highly penetrant mutations.
+- B. Increase common-variant GWAS sample size but exclude rare variants because their observed effects were negligible.
+- C. Combine larger common-variant association studies with targeted sequencing or functional follow-up of rarer, larger-effect variants.
+- D. Treat allele frequency as irrelevant because common and rare lead variants showed comparable effect-size distributions.
 
 *Answer: **C.** The lead-variant distribution contains many common small-effect associations and a
 smaller group of rare, larger-effect associations. This supports a mixed genetic architecture rather
@@ -625,7 +625,7 @@ therefore supports mechanistic heterogeneity: some LDL-C associations plausibly 
 protein sequence, whereas many others require regulatory evidence to identify the effector gene and
 molecular mechanism.*
 
-# Colocalization with molecular QTLs
+# Colocalization with molecular QTLs (Step 5)
 
 Fine-mapping (Step 4) narrows each locus to a short list of candidate causal variants, but a
 credible set does not by itself name the gene through which a variant acts. Colocalization answers
@@ -739,18 +739,18 @@ proof of causality for the trait; that step is Mendelian randomization (Steps 6�
 
 **Which mechanistic map most accurately summarizes what the colocalization analysis added to the fine-mapping results?**
 
-A. Every LDL-C locus was assigned to a liver-expression mechanism, eliminating the need to consider coding effects or other tissues.
-B. Some loci, including HMGCR and PCSK9, supported a shared LDL-C–molecular-QTL signal; APOB favored a distinct coding mechanism; and several other loci remained unresolved because the available QTL context was uninformative.
-C. Any molecular QTL located near an LDL-C association was considered the causal mediator, regardless of whether the association peaks aligned.
-D. Failure to detect a shared molecular-QTL signal excluded LDLR, NPC1L1 and ABCG8 from LDL-C biology.
+- A. Every LDL-C locus was assigned to a liver-expression mechanism, eliminating the need to consider coding effects or other tissues.
+- B. Some loci, including HMGCR and PCSK9, supported a shared LDL-C–molecular-QTL signal; APOB favored a distinct coding mechanism; and several other loci remained unresolved because the available QTL context was uninformative.
+- C. Any molecular QTL located near an LDL-C association was considered the causal mediator, regardless of whether the association peaks aligned.
+- D. Failure to detect a shared molecular-QTL signal excluded LDLR, NPC1L1 and ABCG8 from LDL-C biology.
 
-*Answer: **A.** TThe results separated the loci into shared-signal, distinct-signal and GWAS-only classes rather than assigning one universal regulatory mechanism. The analysis supports locus-specific mechanisms rather than one universal route.
+*Answer: **B.** The results separated the loci into shared-signal, distinct-signal and GWAS-only classes rather than assigning one universal regulatory mechanism. The analysis supports locus-specific mechanisms rather than one universal route.
 HMGCR and PCSK9 provide evidence that the LDL-C and molecular-QTL associations can share a causal
 signal, while APOB favors distinct GWAS and exon-QTL signals and also carries an independently
 fine-mapped missense candidate. Thus, proximity to a molecular QTL is not sufficient to assign
 mediation, and lack of colocalization in an available tissue does not exclude a known effector gene.*
 
-# Mendelian randomization: causal effect of LDL-C on CAD
+# Genome-wide Mendelian randomization (Step 6)
 
 Colocalization (Step 5) tests whether an LDL-C association and a molecular-QTL association share a
 causal variant, but it does not establish whether LDL-C itself influences coronary artery disease.
@@ -820,21 +820,20 @@ estimators, the result should be interpreted as the prespecified IVW estimate ra
 comprehensive pleiotropy-robust analysis.
 
 
-## MCQ 
+## MCQ — Genome-wide Mendelian randomization
 
 **A reviewer asks which biological claim is directly supported by the genome-wide MR analysis, without importing conclusions from colocalization or cis-MR. Which answer is defensible?**
 
-A. Every intervention that lowers LDL-C will have the same clinical effect on CAD.
-B. The analysis excludes all forms of horizontal or correlated pleiotropy among the instruments.
-C. Genetic predisposition to higher circulating LDL-C is associated with increased CAD risk at the trait level, consistent with a causal effect.
-D. The genome-wide instruments identify which individual LDL-regulating gene should be pharmacologically targeted.
+- A. Every intervention that lowers LDL-C will have the same clinical effect on CAD.
+- B. The analysis excludes all forms of horizontal or correlated pleiotropy among the instruments.
+- C. Genetic predisposition to higher circulating LDL-C is associated with increased CAD risk at the trait level, consistent with a causal effect.
+- D. The genome-wide instruments identify which individual LDL-regulating gene should be pharmacologically targeted.
 
-*Answer:** C.**
-The genome-wide analysis used multiplicative random-effects IVW as its prespecified estimator and produced a positive LDL-C-to-CAD estimate. It supports the trait-level causal conclusion, but it was not designed to identify a specific target or comprehensively exclude pleiotropy.*
+*Answer: **C.** The genome-wide analysis used multiplicative random-effects IVW as its prespecified estimator and produced a positive LDL-C-to-CAD estimate. It supports the trait-level causal conclusion, but it was not designed to identify a specific target or comprehensively exclude pleiotropy.*
 
 ---
 
-## Step 7 — Cis Mendelian randomization (drug-target validation)
+# Cis Mendelian randomization: drug-target validation (Step 7)
 
 cis-MR complements the genome-wide analysis by restricting instruments to the genomic region around
 a nominated gene. Candidate instruments are selected from ±200 kb around the full gene body, must
@@ -919,14 +918,14 @@ cis-MR methods such as MRLocus, MR-link-2, or MR-PCA. The agreement with establi
 therefore encouraging, but the regional interpretations remain subject to residual LD, pleiotropy,
 and uncertainty in assigning a cis-region association to one specific gene.
 
-**MCQ — cis-Mendelian Randomization**
+## MCQ — cis-Mendelian randomization
 
-**The four LDL-related regions produced positive cis-IVW estimates, but their supporting evidence was not equally coherent.Suppose a target is carried forward only when it satisfies all three analysis criteria: a positive cis-IVW association with CAD, molecular-QTL colocalization at PP.H4 ≥ 0.80, and no nominal MR-Egger intercept signal at P<0.05.Based on the combined cis-MR, MR-Egger and colocalization results, which locus presents the strongest internally consistent target-level story in this analysis?**
+**The four LDL-related regions produced positive cis-IVW estimates, but their supporting evidence was not equally coherent. Suppose a target is carried forward only when it satisfies all three analysis criteria: a positive cis-IVW association with CAD, molecular-QTL colocalization at PP.H4 ≥ 0.80, and no nominal MR-Egger intercept signal at \(P<0.05\). Based on the combined cis-MR, MR-Egger and colocalization results, which locus presents the strongest internally consistent target-level story in this analysis?**
 
-A. NPC1L1, because its positive IVW result was accompanied by both molecular-QTL colocalization and no indication of directional pleiotropy.
-B. HMGCR, because it showed no evidence of directional pleiotropy and was the only region with a shared molecular-QTL signal.
-C. LDLR, because a positive regional IVW result alone establishes that all instruments act exclusively through LDLR.
-D. PCSK9, because it combined a positive regional IVW estimate, no detected directional-pleiotropy signal and supporting molecular-QTL colocalization.
+- A. NPC1L1, because its positive IVW result was accompanied by both molecular-QTL colocalization and no indication of directional pleiotropy.
+- B. HMGCR, because it showed no evidence of directional pleiotropy and was the only region with a shared molecular-QTL signal.
+- C. LDLR, because a positive regional IVW result alone establishes that all instruments act exclusively through LDLR.
+- D. PCSK9, because it combined a positive regional IVW estimate, no detected directional-pleiotropy signal and supporting molecular-QTL colocalization.
 
 *Answer: **D.** PCSK9 had positive regional MR support, an MR-Egger intercept that did not indicate directional pleiotropy, and a shared LDL-C–molecular-QTL signal. HMGCR also colocalized but had nominal Egger-intercept evidence; LDLR lacked the molecular-QTL support; and NPC1L1 had both a colocalization null and a nominal Egger-intercept signal.*
 
