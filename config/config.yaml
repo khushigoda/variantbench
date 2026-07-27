@@ -107,10 +107,13 @@ ld_prep:
   coloc_pp4_min:  0.8            # Step-5: PP.H4 threshold to call a colocalisation
   mhc_region:     {chr: 6, start: 28510120, end: 33480577}  # excluded in fine-mapping
 
-  # Step 5 colocalisation target genes: locus -> effector Ensembl gene (GRCh38).
-  # Single source of truth is a TSV (locus<TAB>ensg<TAB>symbol), mirroring the
-  # cad_effector_anchors.tsv idiom — read by 05a_coloc.R, no YAML dep in R.
-  coloc_targets:  config/coloc_targets.LDL_C.tsv
+  # Step 5 colocalisation. To run coloc for another metabolite, (1) add it to
+  # coloc_metabolites and (2) drop a config/coloc_targets.<METAB>.tsv listing that
+  # trait's effector genes (locus<TAB>ensg<TAB>symbol, mirroring cad_effector_anchors.tsv).
+  # The targets path is derived from the wildcard via coloc_targets_tpl, so no
+  # per-trait rule edits are needed — read by 05a_coloc.R, no YAML dep in R.
+  coloc_metabolites:  [LDL_C]                              # traits to run Step-5 coloc for
+  coloc_targets_tpl:  "config/coloc_targets.{metabolite}.tsv"
 
 # ---- Tool environments (conda env names on this machine) ----
 envs:

@@ -19,6 +19,12 @@ DATASETS    = config["ldsc_datasets"]   # Step-2 rg datasets: [EstBB, UKBB_EUR, 
 # Step-2 trait subset: run LDSC on just these traits (defaults to ALL if not set in config).
 # Lets you run a fast subset (e.g. [BCAA, Lactate]) without touching Step-1 METABOLITES.
 LDSC_METABOLITES = config.get("ldsc_metabolites", METABOLITES)
+# Step-5 coloc: traits to colocalise (each needs a config/coloc_targets.<METAB>.tsv).
+COLOC_METABOLITES = config["ld_prep"].get("coloc_metabolites",
+                                          config["ld_prep"]["finemap_metabolites"])
+def coloc_targets_file(w):
+    # Per-metabolite effector-gene table, derived from the wildcard (no per-trait rule edits).
+    return config["ld_prep"]["coloc_targets_tpl"].format(metabolite=w.metabolite)
 
 # NOTE (scope: Steps 0-2 today). Steps 3-8 are deferred and live in a commented block
 # at the bottom of this file. They depend on config keys that are intentionally still
@@ -119,12 +125,11 @@ rule all:
         # Step 4e report figures
         expand("results/finemap/{metab}.finemap_summary.png",     metab=config["ld_prep"]["finemap_metabolites"]),
         expand("results/finemap/{metab}.consequence_summary.png", metab=config["ld_prep"]["finemap_metabolites"]),
-        # Step 5 colocalisation — DISABLED in rule all until the coloc architecture is
-        # locked and the step is run. Re-enable these three lines (and drop the trailing
-        # comma above) once results/coloc/ is populated.
-        # expand("results/coloc/{metab}.eqtl_coverage.best.tsv", metab=config["ld_prep"]["finemap_metabolites"]),
-        # expand("results/coloc/{metab}.coloc.tsv",              metab=config["ld_prep"]["finemap_metabolites"]),
-        # expand("results/coloc/{metab}.coloc.best.tsv",         metab=config["ld_prep"]["finemap_metabolites"])
+        # Step 5 colocalisation — one row per metabolite in coloc_metabolites (each
+        # needs a config/coloc_targets.<METAB>.tsv). Self-bridging rules, no --use-conda.
+        expand("results/coloc/{metab}.eqtl_coverage.best.tsv", metab=COLOC_METABOLITES),
+        expand("results/coloc/{metab}.coloc.tsv",              metab=COLOC_METABOLITES),
+        expand("results/coloc/{metab}.coloc.best.tsv",         metab=COLOC_METABOLITES)
 
 # =========================================================
 # Step 1 — meta-analysis (EstBB + UKBB_EUR -> meta), reads RAW files directly
@@ -404,15 +409,22 @@ rule finemap_plots:
 #     per dataset. Writes {trait}.eqtl_coverage.best.tsv (one row per gene x quant
 #     method -> best-powered dataset + best_mtid). Light (no lBF matrices), stdlib.
 rule coverage_scan:
+    # Self-bridging: no `conda:` directive (so `--use-conda` never tries to build an
+    # env for this rule); instead `conda run -n {main}` activates the tool env inside
+    # the shell, exactly like the Step-2 ldsc rules. Runs with a plain
+    #   snakemake --cores 1 results/coloc/{METAB}.eqtl_coverage.best.tsv
+    # from the `variantbench` (snakemake) env — no --use-conda needed for Step 5.
     input:
-        targets=config["ld_prep"]["coloc_targets"],
+        targets=coloc_targets_file,
         pyscript="workflow/scripts/05_coverage_scan.py"
     output:
         coverage="results/coloc/{metabolite}.eqtl_coverage.tsv",
         best="results/coloc/{metabolite}.eqtl_coverage.best.tsv"
-    conda:  config["envs"]["main"]
+    params:
+        main_env=config["envs"]["main"]
     shell:
-        "TRAIT={wildcards.metabolite} "
+        "conda run -n {params.main_env} --no-capture-output "
+        "env TRAIT={wildcards.metabolite} "
         "TARGETS={input.targets} OUTDIR=results/coloc "
         "python workflow/scripts/05_coverage_scan.py"
 
@@ -423,25 +435,28 @@ rule coverage_scan:
 #     No lBF download, no SuSiE re-fit — assumes <=1 causal variant per window
 #     (multi-signal SuSiE-coloc is the documented future refinement, see report).
 rule coloc:
+    # Self-bridging (see coverage_scan): no `conda:` directive; `conda run -n {r}`
+    # activates the R/coloc env inside the shell. No --use-conda needed.
     input:
         loci="results/ld/{metabolite}.loci.tsv",
         gwas="results/meta/{metabolite}.meta.tsv.bgz",         # tabix'd marginal stats
         gwas_tbi="results/meta/{metabolite}.meta.tsv.bgz.tbi",
         best="results/coloc/{metabolite}.eqtl_coverage.best.tsv",
-        targets=config["ld_prep"]["coloc_targets"],
+        targets=coloc_targets_file,
         rscript="workflow/scripts/05a_coloc.R"
     output:
         allpairs="results/coloc/{metabolite}.coloc.tsv",       # every (gene x quant) tested
         best="results/coloc/{metabolite}.coloc.best.tsv"       # best quant per gene + coloc call
     params:
+        r_env=config["envs"]["r"],
         api=config["ref"].get("eqtl_api_base", "https://www.ebi.ac.uk/eqtl/api/v2"),
         p1=config["ld_prep"]["coloc_priors"]["p1"],
         p2=config["ld_prep"]["coloc_priors"]["p2"],
         p12=config["ld_prep"]["coloc_priors"]["p12"],
         pp4=config["ld_prep"].get("coloc_pp4_min", 0.8)
-    conda:  config["envs"]["r"]
     shell:
-        "TRAIT={wildcards.metabolite} "
+        "conda run -n {params.r_env} --no-capture-output "
+        "env TRAIT={wildcards.metabolite} "
         "LDDIR=results/ld OUTDIR=results/coloc "
         "GWAS_BGZ={input.gwas} "
         "TARGETS={input.targets} BEST={input.best} "

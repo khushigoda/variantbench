@@ -105,10 +105,21 @@ at PIP=1. Outputs: `results/finemap/LDL_C.{finemap.tsv, cs_summary[.filtered].ts
 annot[.missense].tsv}` + 11 regional plots and two summary figures. Method vs. authors:
 `docs/04_finemap_vs_authors.md`.
 
-**Step 5 — colocalization with molecular QTLs: in design.** Trait–QTL coloc of the LDL
+**Step 5 — colocalization with molecular QTLs.** Trait–QTL coloc of the LDL
 fine-mapping signals against the eQTL Catalogue, sweeping all molecular-QTL quantification
 methods (ge/exon/tx/txrev/leafcutter/microarray/aptamer), tissue chosen data-driven per gene.
-Retrieval + engine architecture under review (see `docs/05_coloc_design.md`).
+`05_coverage_scan.py` sweeps the whole Catalogue for datasets that fine-map each effector gene;
+`05a_coloc.R` runs single-signal `coloc.abf` per (gene × quant) candidate, tabix-slicing the GWAS
+window from the bgzipped meta stats and pulling QTL marginals from the eQTL Catalogue REST API
+(single-causal-variant assumption; multi-signal SuSiE-coloc is the documented future refinement).
+Unlike the other R steps, the two Step-5 rules **self-bridge** their conda env (explicit
+`conda run -n variantbench-r` inside the shell, like the Step-2 LDSC rules) rather than relying on
+`--use-conda`, so Step 5 runs with a plain `snakemake --cores 1` from the driver env.
+
+To run coloc for another metabolite: add it to `ld_prep.coloc_metabolites` and drop a
+`config/coloc_targets.<METAB>.tsv` (columns `locus<TAB>ensg<TAB>symbol`) listing that trait's
+effector genes — the targets path is derived from the wildcard, so no Snakefile edits are needed.
+See `docs/05_coloc_design.md` for the retrieval/engine architecture.
 
 ## Run
 
