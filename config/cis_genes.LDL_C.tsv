@@ -1,0 +1,8 @@
+# Canonical LDL-C drug-target genes for Step-7 cis-MR (GRCh38 gene bodies).
+# Coordinates fetched from Ensembl REST (lookup/id, GRCh38) — gene body start/end.
+# The ±cis_window (config: mr.cis_window = 200000) is applied around [start,end].
+gene	ensg	chr	start	end
+PCSK9	ENSG00000169174	1	55039445	55064852
+HMGCR	ENSG00000113161	5	75336329	75364241
+NPC1L1	ENSG00000015520	7	44512442	44541330
+LDLR	ENSG00000130164	19	11089418	11133830

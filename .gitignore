@@ -22,3 +22,14 @@ report/*_files/
 __pycache__/
 results/finemap/*.susie.rds
 results/finemap/*.vep_raw.json
+results/coloc/*.lbf.tsv.gz
+# large intermediate LD-prep scratch (2.1G .ld matrices + regional gwas/plink sidecars;
+# all regenerable from the 1000G panel via make_ld — not story-telling result tables)
+results/ld/
+# scratch / agent-preview / editor noise
+_view_*.png
+ovw_check.png
+plink2.log
+*.bak
+.Rhistory
+report/report_*check*.html

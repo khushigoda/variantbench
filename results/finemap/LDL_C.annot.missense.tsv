@@ -1,0 +1,6 @@
+trait	gene	chr	ID	POS	ea	oa	pip	z	r2_lead	cs	coverage	pass_filter	most_severe	consequence	impact	is_missense	gene_symbol	is_expected_gene	aa_change	codons	sift_pred	sift_score	polyphen_pred	polyphen_score	biotype	allele_match	is_known_causal
+LDL_C	PCSK9	1	rs11591147	55039974	T	G	1	-48.4568685090653	1	1	0.95	TRUE	missense_variant	missense_variant	MODERATE	TRUE	PCSK9	TRUE	R46L	cGt/cTt	tolerated	0.32	benign	0	protein_coding	ea	TRUE
+LDL_C	ABCG5_8	2	rs141828689	43828024	T	C	1	8.85597739410795	0.00362166850809	5	0.95	TRUE	missense_variant	missense_variant	MODERATE	TRUE	ABCG5	TRUE	R198Q	cGg/cAg	deleterious	0.03	probably_damaging	0.999	protein_coding	ea	FALSE
+LDL_C	ABCG5_8	2	rs4148217	43872294	A	C	0.0407494245470542	-15.8851219804164	0.104331584016	10	0.95	TRUE	missense_variant	missense_variant	MODERATE	TRUE	ABCG8	TRUE	T400K	aCg/aAg	deleterious	0.03	benign	0.027	protein_coding	ea	FALSE
+LDL_C	APOB	2	rs1367117	21041028	A	G	0.145038947337568	43.2314537113781	0.078129753289	3	0.95	TRUE	missense_variant	missense_variant	MODERATE	TRUE	APOB	TRUE	T98I	aCc/aTc	deleterious	0	benign	0.039	protein_coding	ea	FALSE
+LDL_C	APOE	19	rs429358	44908684	C	T	1	79.8702319586351	0.00936727815409	7	0.95	TRUE	missense_variant	missense_variant	MODERATE	TRUE	APOE	TRUE	C130R	Tgc/Cgc	tolerated	1			protein_coding	ea	FALSE

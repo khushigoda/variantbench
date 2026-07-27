@@ -1,0 +1,10 @@
+06:56:38  [1] leads=321  ->  candidates (MAF>0.01, P<5.0e-08)=286  (dropped 3 non-autosomal)
+06:57:45  [2] LD panel coverage: 284/286 candidates matched; 2 absent (kept independent)
+06:57:45  [2a->] entering greedy prune
+06:57:45  [2b] greedy pruning: 286 candidates -> 231 independent instruments
+06:57:45  [3->] entering tabix harmonize on 231 pruned instruments
+06:57:46  [3] harmonized instruments: 219 (dropped 12: palindromic / allele-mismatch / absent in outcome)
+06:57:46  [4->] entering IVW on 219 harmonized instruments
+06:57:46  [4] IVW: b=0.5085 se=0.0428  OR=1.663 (1.529, 1.808)  P=1.49e-32  nsnp=219
+06:57:46  [5->] entering scatter plot
+06:57:46  [done] 06 genome-wide MR

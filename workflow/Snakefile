@@ -26,6 +26,26 @@ def coloc_targets_file(w):
     # Per-metabolite effector-gene table, derived from the wildcard (no per-trait rule edits).
     return config["ld_prep"]["coloc_targets_tpl"].format(metabolite=w.metabolite)
 
+# Step 6-7 MR: exposure metabolite(s) x disease outcome(s) to run. Defaults to the
+# fine-mapping trait as exposure and CAD as outcome (the only outcome provisioned +
+# harmonized on disk; T2D needs its manual DIAMANTE download + liftover first).
+MR_METABOLITES = config["ld_prep"].get("mr_metabolites",
+                                       config["ld_prep"]["finemap_metabolites"])
+MR_OUTCOMES    = config.get("mr_outcomes", ["CAD"])
+
+def outcome_raw_file(outcome):
+    """Raw (GRCh38-harmonized) outcome GWAS path used by MR Steps 6-7.
+    CAD is a GWAS-Catalog harmonized file ({outcome}.{accession}.h.tsv.gz);
+    T2D is a manually-downloaded file named by config outcomes.<o>.file."""
+    o = config["outcomes"][outcome]
+    if "file" in o:
+        return f"data/raw/{o['file']}"
+    return f"data/raw/{outcome}.{o['accession']}.h.tsv.gz"
+
+def cis_genes_file(w):
+    # Per-metabolite cis drug-target gene-body coord table (GRCh38); mirrors coloc_targets.
+    return f"config/cis_genes.{w.metabolite}.tsv"
+
 # NOTE (scope: Steps 0-2 today). Steps 3-8 are deferred and live in a commented block
 # at the bottom of this file. They depend on config keys that are intentionally still
 # commented out (ref.geno_panel, ref.eqtl_dataset, metabolites.*.cis_genes/coloc_locus);
@@ -130,7 +150,12 @@ rule all:
         expand("results/coloc/{metab}.eqtl_coverage.best.tsv", metab=COLOC_METABOLITES),
         expand("results/coloc/{metab}.coloc.tsv",              metab=COLOC_METABOLITES),
         expand("results/coloc/{metab}.coloc.best.tsv",         metab=COLOC_METABOLITES),
-        expand("results/coloc/{metab}.coloc_overview.png",     metab=COLOC_METABOLITES)
+        expand("results/coloc/{metab}.coloc_overview.png",     metab=COLOC_METABOLITES),
+        # Step 6 genome-wide MR + Step 7 cis-MR (exposure x outcome; CAD provisioned)
+        expand("results/mr/{metab}.{outcome}.gwmr.tsv",   metab=MR_METABOLITES, outcome=MR_OUTCOMES),
+        expand("results/mr/{metab}.{outcome}.scatter.png", metab=MR_METABOLITES, outcome=MR_OUTCOMES),
+        expand("results/mr/{metab}.{outcome}.cismr.tsv",  metab=MR_METABOLITES, outcome=MR_OUTCOMES),
+        expand("results/mr/{metab}.{outcome}.cismr.png",  metab=MR_METABOLITES, outcome=MR_OUTCOMES)
 
 # =========================================================
 # Step 1 — meta-analysis (EstBB + UKBB_EUR -> meta), reads RAW files directly
@@ -495,42 +520,77 @@ rule coloc_plots:
         "BESTCOLOC={input.best} API={params.api} PP4_MIN={params.pp4} "
         "Rscript workflow/scripts/05b_coloc_plots.R"
 #
-# # =========================================================
-# # Step 6 — genome-wide MR (metabolite -> outcome)
-# # =========================================================
-# rule gwmr:
-#     input:
-#         exposure="results/meta/{metabolite}.meta.tsv.gz",
-#         outcome="results/norm/{outcome}.norm.tsv.gz"
-#     output:
-#         tsv="results/mr/{metabolite}.{outcome}.gwmr.tsv",
-#         scatter="results/mr/{metabolite}.{outcome}.scatter.png",   # SNP effect exp vs out
-#         loo="results/mr/{metabolite}.{outcome}.loo.png"            # leave-one-out (§7)
-#     params:
-#         seed=config["params"]["seed"],
-#         r2=config["params"]["clump_r2_instr"],
-#         maf=config["params"]["maf_min"],
-#         gws_p=config["params"]["gws_p"],
-#         panel=config["ref"]["geno_panel"]
-#     conda:  config["envs"]["r"]
-#     script: "scripts/06_gwmr.R"
-#
-# # =========================================================
-# # Step 7 — cis-MR (drug-target)
-# # =========================================================
-# rule cismr:
-#     input:
-#         exposure="results/meta/{metabolite}.meta.tsv.gz",
-#         outcome="results/norm/{outcome}.norm.tsv.gz"
-#     output: "results/cismr/{metabolite}.{outcome}.cismr.tsv"
-#     params:
-#         seed=config["params"]["seed"],
-#         cis_window=config["params"]["cis_window"],
-#         r2=config["params"]["clump_r2_instr"],
-#         genes=lambda w: config["metabolites"][w.metabolite]["cis_genes"],
-#         panel=config["ref"]["geno_panel"]
-#     conda:  config["envs"]["r"]
-#     script: "scripts/07_cismr.R"
+# =========================================================
+# Step 6 — genome-wide MR (metabolite -> disease)
+# =========================================================
+# Self-bridging (like coloc/finemap): NO `conda:` directive; `conda run -n {r}`
+# activates the R env in the shell, and the R script reaches plink2 via the
+# PLINK2="conda run -n plink2 plink2" env var. No --use-conda needed.
+# Instruments = the trait's lead variants (MAF>maf_min, P<gws_p), greedy LD-pruned
+# to r2<clump_r2_instr against the 1000G-EUR panel; estimator = multiplicative
+# random-effects IVW-MR (MendelianRandomization). One causal estimate.
+rule gwmr:
+    input:
+        leads="results/loci/{metabolite}.lead.tsv",
+        outcome=lambda w: outcome_raw_file(w.outcome),
+        rscript="workflow/scripts/06_gwmr.R"
+    output:
+        tsv="results/mr/{metabolite}.{outcome}.gwmr.tsv",
+        instruments="results/mr/{metabolite}.{outcome}.instruments.tsv",
+        scatter="results/mr/{metabolite}.{outcome}.scatter.png"       # per-SNP bx vs by + IVW slope
+    params:
+        r_env=config["envs"]["r"],
+        refdir=config["ld_prep"]["refdir"],
+        seed=config["params"]["seed"],
+        gws_p=config["params"]["gws_p"],
+        maf_min=config["params"]["maf_min"],
+        r2=config["params"]["clump_r2_instr"]
+    shell:
+        "conda run -n {params.r_env} --no-capture-output "
+        "env TRAIT={wildcards.metabolite} OUTCOME={wildcards.outcome} "
+        "LEADS={input.leads} OUTCOME_GZ={input.outcome} "
+        "REFDIR={params.refdir} KEEP={params.refdir}/1kg_eur.keep "
+        "PLINK2='conda run -n plink2 plink2' "
+        "OUTDIR=results/mr "
+        "GWS_P={params.gws_p} MAF_MIN={params.maf_min} R2={params.r2} SEED={params.seed} "
+        "Rscript workflow/scripts/06_gwmr.R"
+
+# =========================================================
+# Step 7 — cis-MR (drug-target)
+# =========================================================
+# Same self-bridging + greedy pruning + rsID harmonization as Step 6, but per gene:
+# instruments = exposure meta variants within +/-cis_window of each GRCh38 gene body
+# (config/cis_genes.<trait>.tsv), and the estimator is IVW-MR (weights="delta", the
+# paper's cis-MR choice) plus MR-Egger as the pleiotropy-robust companion. One row/gene.
+rule cismr:
+    input:
+        exposure="results/meta/{metabolite}.meta.tsv.bgz",       # tabix'd per-variant marginal stats
+        exposure_tbi="results/meta/{metabolite}.meta.tsv.bgz.tbi",
+        outcome=lambda w: outcome_raw_file(w.outcome),
+        genes=cis_genes_file,
+        rscript="workflow/scripts/07_cismr.R"
+    output:
+        tsv="results/mr/{metabolite}.{outcome}.cismr.tsv",
+        instruments="results/mr/{metabolite}.{outcome}.cismr.instruments.tsv",
+        forest="results/mr/{metabolite}.{outcome}.cismr.png"        # per-gene IVW OR + 95% CI
+    params:
+        r_env=config["envs"]["r"],
+        refdir=config["ld_prep"]["refdir"],
+        seed=config["params"]["seed"],
+        cis_window=config["params"]["cis_window"],
+        gws_p=config["params"]["gws_p"],
+        maf_min=config["params"]["maf_min"],
+        r2=config["params"]["clump_r2_instr"]
+    shell:
+        "conda run -n {params.r_env} --no-capture-output "
+        "env TRAIT={wildcards.metabolite} OUTCOME={wildcards.outcome} "
+        "GENES_TSV={input.genes} EXP_BGZ={input.exposure} OUTCOME_GZ={input.outcome} "
+        "REFDIR={params.refdir} KEEP={params.refdir}/1kg_eur.keep "
+        "PLINK2='conda run -n plink2 plink2' "
+        "OUTDIR=results/mr "
+        "CIS_WINDOW={params.cis_window} GWS_P={params.gws_p} MAF_MIN={params.maf_min} "
+        "R2={params.r2} SEED={params.seed} "
+        "Rscript workflow/scripts/07_cismr.R"
 #
 # =========================================================
 # Step 8 — report (Rmd -> self-contained HTML)
@@ -570,7 +630,13 @@ rule report:
         # Step 5 — colocalization overview + per-gene regional plots (coloc trait only)
         coloc_best=expand("results/coloc/{metab}.coloc.best.tsv",   metab=COLOC_METABOLITES),
         coloc_overview=expand("results/coloc/{metab}.coloc_overview.png", metab=COLOC_METABOLITES),
-        coloc_plots="results/coloc/plots"
+        coloc_plots="results/coloc/plots",
+        # Step 6 — genome-wide IVW-MR (result + instruments + scatter)
+        gwmr=expand("results/mr/{metab}.{outcome}.gwmr.tsv",         metab=MR_METABOLITES, outcome=MR_OUTCOMES),
+        gwmr_scatter=expand("results/mr/{metab}.{outcome}.scatter.png", metab=MR_METABOLITES, outcome=MR_OUTCOMES),
+        # Step 7 — cis-MR (drug-target) per-gene result + forest
+        cismr=expand("results/mr/{metab}.{outcome}.cismr.tsv",       metab=MR_METABOLITES, outcome=MR_OUTCOMES),
+        cismr_forest=expand("results/mr/{metab}.{outcome}.cismr.png",   metab=MR_METABOLITES, outcome=MR_OUTCOMES)
     output: "report/report.html"
     params: seed=config["params"]["seed"]
     conda:  config["envs"]["r"]
