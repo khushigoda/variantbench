@@ -173,7 +173,7 @@ study** where a lighter or more self-contained alternative fit the resource enve
 substitutions are flagged in the affected sections). All work runs on a single workstation-class
 machine (**8-core CPU, 8 GiB RAM, no GPU**); memory in particular drives several of these choices.
 
-**The LD reference is out-of-sample.** Fine-mapping, clumping, and MR instrument pruning use a
+**The LD reference is out-of-sample.** Fine-mapping and MR instrument pruning use a
 1000 Genomes EUR panel, **not** the in-sample UKBB LD the reference paper used. Out-of-sample LD
 can miscalibrate SuSiE credible sets and mis-prune instruments; this is an accepted tractability
 tradeoff, flagged here and again in each affected section. With LDL_C selected as the metabolite of interest, **CAD is the
@@ -257,21 +257,30 @@ allele-flipping step could have harmonised are instead reported from a single co
 validation here is a *reproduction* check against the authors' own published meta over the identical
 cohorts: near-perfect agreement confirms the allele harmonisation and inverse-variance weighting are
 correct, but it does not independently replicate the association signal in a fresh sample the way a
-comparison against a separate study would.
+comparison against a separate study would. Nor does genome-wide reproduction validate every locus
+individually: a pooled hit with opposite-signed cohort effects and strong Cochran's-*Q* heterogeneity
+should still be treated as potentially cohort-specific or artefactual rather than automatically as a
+shared biological association.
 
 ## MCQ — Meta-analysis
 
-**A variant is genome-wide significant in the EstBB + UKBB meta-analysis but reached significance
-in neither cohort alone. The most appropriate interpretation is:**
+**After combining the EstBB and UKBB_EUR association results and comparing the pooled and
+cohort-specific LDL-C signals, which conclusion is best supported?**
 
-- A. The meta-analysis has inflated type-I error, so the hit is probably false.
-- B. Increased sample size raised power; concordant same-direction effects combined to cross the threshold.
-- C. The variant must have opposite effects in the two cohorts.
-- D. It indicates a batch effect between cohorts.
+- A. The cohort-specific effects were broadly concordant and the pooled effects reproduced the
+  published European meta-analysis, supporting a largely shared LDL-C genetic architecture that can
+  be studied with greater power after pooling.
+- B. Most associated variants had opposing effects between cohorts, supporting predominantly
+  population-specific LDL-C mechanisms.
+- C. The pooled associations were driven almost entirely by EstBB, with little contribution from
+  UKBB_EUR.
+- D. The two cohorts measured genetically distinct phenotypes and should not have been combined.
 
-*Answer: **B.** Meta-analysis gains power precisely when per-cohort effects are concordant; a
-sub-threshold-but-consistent signal crossing genome-wide significance is the expected behaviour,
-not an artifact.*
+*Answer: **A.** The cross-cohort effect patterns are broadly concordant, and the independently
+reconstructed pooled effects match the published European meta-analysis. Together, those results
+support a largely shared LDL-C genetic architecture and justify combining the cohorts to increase
+association power, while heterogeneous individual loci remain subject to the Cochran's-*Q* caveat
+discussed above.*
 
 # Heritability & genetic correlation (Step 2, LDSC)
 
@@ -341,7 +350,10 @@ explicitly.
 **Limitations.** LDSC heritability is a *common-variant, HapMap3-tagged* estimate: pre-restricting to
 the ~1.2M HapMap3 rsIDs is what makes the step tractable at 8 GiB, but it means rare-variant and
 poorly-tagged contributions to heritability are not captured, so these h² values are lower bounds on
-total SNP-heritability rather than complete accounts. LDSC also assumes a roughly polygenic
+total SNP-heritability rather than complete accounts. The later observation of rare LDL-C leads
+with large per-allele effects is therefore not inconsistent with the moderate LDSC estimate: very rare
+alleles are poorly represented by HapMap3, and a large effect carried by few individuals need not
+explain a large fraction of population variance. LDSC also assumes a roughly polygenic
 architecture and a well-matched LD reference; for traits with a few very large-effect loci (LDL_C
 included) the regression can be sensitive to those loci, and the standard errors on a four-trait
 panel are wider than the paper's genome-wide estimates over 249 traits. The genetic-correlation
@@ -349,18 +361,24 @@ estimates inherit the same caveats and, for Analysis A, the EstBB and UKBB_EUR i
 independent of the meta they are correlated with, so those particular correlations are expected to
 run high by construction.
 
-## MCQ — Heritability (LDSC)
+## MCQ — Heritability and genetic correlation (LDSC)
 
-**The LDSC regression for a trait returns an intercept ≈ 1.0. This indicates:**
+**After estimating common-variant heritability and cross-biobank genetic correlation for LDL-C,
+BCAA, glucose and lactate, which pattern was supported by the analysis?**
 
-- A. Severe population stratification inflating all test statistics.
-- B. Minimal confounding; inflation in the test statistics reflects genuine polygenic signal.
-- C. The heritability estimate is invalid.
-- D. Severe sample overlap between the two cohorts.
+- A. LDL-C showed the strongest common-variant contribution and lactate the weakest, while all four
+  traits retained broadly similar genetic architectures across EstBB and UKBB.
+- B. All four traits had approximately identical heritability, but their genetic effects differed
+  substantially between the two biobanks.
+- C. Lactate showed the strongest inherited contribution and the greatest cross-biobank
+  reproducibility.
+- D. None of the traits showed sufficient shared genetic architecture to justify meta-analysis.
 
-*Answer: **B.** The LDSC intercept isolates confounding/inflation from polygenicity; an intercept
-near 1 means the elevated χ² comes from real polygenic signal, validating the h² estimate. (A
-markedly elevated intercept would instead flag stratification or sample overlap.)*
+*Answer: **A.** The analysis places LDL-C at the highest and lactate at the lowest end of the four
+common-variant heritability estimates, while the consistently high EstBB–UKBB genetic correlations
+show that the traits' inherited architectures are broadly shared across cohorts. Heritability and
+genetic correlation answer different questions: the traits can differ in the amount of variance
+tagged by common variants while remaining genetically reproducible between biobanks.*
 
 # Lead variants (Step 3)
 
@@ -400,12 +418,13 @@ show_figs(sm@input$manhattan)
 
 The headline result of this step is the **concordance with the published loci**. Benchmarked against
 the authors' `meta_EUR` LDL_C lead variants, this step recovers **96.3%** (310/322) of their loci at
-the exact lead position — 321 leads called here against 322 published. That level of agreement, from
-an independent reimplementation running on an out-of-sample LD reference, is the evidence that the
-lead-calling is working. The small residual is exactly what an out-of-sample 1000G-EUR reference
-predicts: within a shared association signal a different LD reference can tag a slightly different
-sentinel SNP, so the locus is found but the precise lead variant occasionally differs by a few
-kilobases. The Manhattan plot shows the genome-wide signal with the called leads marked.
+the exact lead position — 321 leads called here against 322 published. That level of agreement from
+an independent summary-statistic reimplementation supports the lead-calling procedure. Importantly,
+Step 3 uses association statistics and physical distance only, so the residual discrepancies cannot
+be attributed to the out-of-sample 1000G-EUR LD reference used later in Step 4. They more plausibly
+reflect differences in variant availability or frequency annotation and the use of fixed distance
+windows rather than the authors' LD-based locus merging. The Manhattan plot shows the genome-wide
+signal with the called leads marked.
 
 **How this compares to the source manuscript.** Beyond the exact 322-vs-322 lead count already
 shown, the frequency structure of the leads reproduces one of the paper's descriptive results. Their
@@ -427,7 +446,11 @@ does not have. The frequency-dependent threshold, while defensible, uses a fixed
 the rare-variant Bonferroni line rather than the true number of independent rare tests, so it is
 approximate. And because effect-allele frequency is missing for some variants, the `unknown` class is
 called at the looser line and may include a small number of rare variants that a complete
-frequency annotation would have held to the stricter bar.
+frequency annotation would have held to the stricter bar. Accordingly, an unknown-frequency lead
+that later proves rare and passes only the standard 5×10⁻⁸ threshold should be treated as provisional,
+not as a secure rare-variant discovery. Likewise, physical separation alone is not evidence of
+independence: two leads outside the ±1 Mb exclusion window may still represent one biological signal
+if long-range LD connects them.
 
 ```{r loci-maf-effect-fig, results='asis'}
 # LDL_C analogue of Karjalainen/paper Supplementary Fig. 3A: lead MAF vs |effect size|,
@@ -437,33 +460,22 @@ show_figs(sm@input$maf_effect)
 
 ## MCQ — Lead variants
 
-**Step 3 calls lead variants with a frequency-dependent threshold: P < 5×10⁻⁸ for common variants
-(MAF > 0.1%) but the stricter P < 6.25×10⁻¹⁰ for rare variants. The rare-variant threshold is
-tightened because:**
+**After identifying independent LDL-C lead variants and comparing their effect sizes across the
+allele-frequency spectrum, which model of LDL-C genetic architecture was best supported?**
 
-- A. Rare variants have larger effect sizes, so they need a higher bar.
-- B. There are far more rare-variant tests (~80M), so the standard 5×10⁻⁸ line is anti-conservative and would admit too many false positives.
-- C. Rare variants are always artifacts and should be suppressed.
-- D. LDSC requires it for the heritability estimate.
+- A. LDL-C is influenced by numerous common variants with relatively small effects together with a
+  smaller set of rare variants carrying larger effects.
+- B. LDL-C is primarily a monogenic trait in which a few rare variants explain nearly all inherited
+  variation.
+- C. LDL-C is influenced almost exclusively by common variants, with no credible contribution from
+  rare variants.
+- D. Allele frequency and effect size showed no discernible relationship among the lead variants.
 
-*Answer: **B.** The genome-wide 5×10⁻⁸ threshold is calibrated to ~1M independent common-variant
-tests. Adding ~80M rare-variant tests inflates the multiple-testing burden, so a Bonferroni-style
-tightening (0.05/8×10⁷) is needed to hold the family-wise error rate.*
-
-**A follow-on on locus definition: this replication defines independent loci by distance (top SNP,
-then a ±1 Mb exclusion window, iterated) rather than by the paper's LD-based r²≥0.05 merge. The main
-scientific limitation of the distance-only rule is:**
-
-- A. It cannot handle more than one chromosome.
-- B. A single very strong signal (−log₁₀P ≫ 100) can generate association that extends beyond 2 Mb through LD, so distance clumping may split one true signal into several "independent" loci.
-- C. It systematically undercounts loci relative to LD clumping.
-- D. It requires an in-sample LD matrix to run.
-
-*Answer: **B.** LD can carry a strong association past a fixed window; the paper's r²≥0.05 merge
-exists specifically to stop that "bleeding" and collapse the fragments into one locus. Distance
-clumping has no way to know two windows tag the same causal variant, so it can over-count. It is the
-honest choice only when no matched genotype panel is available to compute pairwise r² — which is the
-case here.*
+*Answer: **A.** The lead-variant distribution contains many common small-effect associations and a
+smaller group of rare, larger-effect associations. This supports a mixed genetic architecture rather
+than a purely common-variant or rare-variant model. Larger per-allele effects do not imply that rare
+variants explain most population variance, because their low frequencies sharply limit how many
+individuals carry them.*
 
 # Fine-mapping + coding annotation (Step 4)
 
@@ -490,9 +502,9 @@ show_table(annot_tab, "Credible-set variants and coding annotation")
 ```
 
 Only the credible-set variants annotated as **missense** are shown below — these are the coding
-candidates that fine-mapping nominates as potentially causal. The recovery of textbook LDL coding
-variants (PCSK9 R46L, APOE C130R) at PIP = 1 is the strongest validation that the pipeline works
-despite the out-of-sample LD.
+candidates that fine-mapping nominates as potentially causal. Recovering textbook LDL coding
+variants (PCSK9 R46L, APOE C130R) at PIP = 1 provides a strong positive-control check at those loci,
+although it does not establish calibration across every locus under the out-of-sample LD reference.
 
 **How this compares to the source manuscript.** The authors fine-map genome-wide across all traits
 and report 116,467 credible sets, of which 31,392 (27%) resolve to 3,000 distinct putative causal
@@ -553,7 +565,10 @@ whole analysis, and it bites hardest here: SuSiE-RSS assumes the LD matrix match
 and a mismatched reference can miscalibrate PIPs and produce spurious or oversized credible sets. The
 fingerprint of that mismatch is visible in the convergence QC — most loci hit the IBSS iteration cap
 — which is why the LD-mismatch diagnostic is reported per locus and the residual variance is fixed
-rather than estimated. Two further limits bound what this step can claim. The scope is 11 LDL effector
+rather than estimated. Recovery of strong positive controls such as PCSK9 R46L and APOE C130R shows
+that some well-tagged local signals remain identifiable, but it does not establish that PIPs and
+credible-set membership are calibrated at every locus; loci with convergence or mismatch warnings
+must still be interpreted cautiously. Two further limits bound what this step can claim. The scope is 11 LDL effector
 loci for one trait, so it is a hypothesis-driven probe of the method's calibration, not a
 genome-wide fine-mapping result. And coding annotation explains only a minority of the signal: of the
 credible-set variants only a handful are missense, while most are regulatory or intronic and cannot
@@ -563,19 +578,23 @@ not part of this replication, so splice-altering credible-set variants are not i
 
 ## MCQ — Fine-mapping
 
-**The pipeline fine-maps with an out-of-sample 1000G EUR LD reference rather than the in-sample
-UKBB LD used by the reference paper. The primary risk this introduces to the credible sets is:**
+**After fine-mapping the canonical LDL-C loci and annotating the resulting credible-set variants,
+which biological model was best supported?**
 
-- A. They will always be too small.
-- B. LD mismatch can miscalibrate posterior inclusion probabilities and yield spurious or oversized credible sets.
-- C. SuSiE cannot run at all without in-sample LD.
-- D. It only affects the Manhattan plot, not fine-mapping.
+- A. LDL-C associations involve a mixture of protein-altering and noncoding mechanisms: several
+  loci prioritized established missense variants, while most prioritized variants were regulatory
+  or intronic.
+- B. Nearly every LDL-C association was resolved to a missense variant, indicating that altered
+  protein sequence is the dominant mechanism across loci.
+- C. No coding candidates were identified, indicating that LDL-C genetics acts entirely through gene
+  regulation.
+- D. Fine-mapping supported one identical molecular mechanism across all LDL-C loci.
 
-*Answer: **B.** SuSiE-RSS assumes the LD matrix matches the GWAS sample; a mismatched reference
-distorts PIPs and credible-set membership. In this run the fingerprint is visible in the
-convergence QC (most loci hit the IBSS iteration cap), which is why an `estimate_s_rss` LD-mismatch
-diagnostic is reported per locus and `estimate_residual_variance` is fixed to `FALSE` — the
-documented remedy for out-of-sample LD. This is the single most important caveat of the analysis.*
+*Answer: **A.** Fine-mapping recovered established protein-altering candidates at loci including
+PCSK9, APOE, APOB and ABCG5/ABCG8, but most credible-set variants were noncoding. The analysis
+therefore supports mechanistic heterogeneity: some LDL-C associations plausibly act through altered
+protein sequence, whereas many others require regulatory evidence to identify the effector gene and
+molecular mechanism.*
 
 # Colocalization with molecular QTLs
 
@@ -635,7 +654,13 @@ that tissue is not the mechanism. APOB is the instructive case: it carries stron
 biology, and the LDL signal there is not explained by the skin exon-QTL, consistent with a direct
 protein-coding rather than an expression-regulatory mechanism. The last three — ABCG8, LDLR and
 NPC1L1 — are **GWAS-only** (high PP.H1): the molecular QTL is simply not associated in the tissue
-tested, most likely a power or tissue-context limitation rather than evidence against the gene.
+tested, most likely a power or tissue-context limitation rather than evidence against the gene. Taken together, the loci do not support one uniform molecular mechanism. Some are consistent with a
+shared regulatory, splicing or protein-level signal, whereas others — APOB most clearly — are better
+explained by a coding mechanism than by the tested molecular QTL. The tissue label of a successful
+colocalization should also not be read automatically as the physiological tissue of action: regulatory
+QTLs can be shared across tissues, and the only available liver dataset was too small to fine-map any
+of these genes. The non-liver findings therefore nominate shared variant–molecular-phenotype
+relationships without excluding liver mediation.
 
 ```{r coloc-overview-fig, results='asis'}
 cat("The colocalization outcome for every effector gene, decomposing the posterior into PP.H4",
@@ -683,23 +708,23 @@ proof of causality for the trait; that step is Mendelian randomization (Steps 6�
 
 ## MCQ — Colocalization
 
-**At the ABCG8 / LDLR / NPC1L1 loci the LDL-C GWAS signal is genome-wide significant, yet the
-colocalization posterior puts most of its mass on PP.H1 (GWAS-only), not PP.H4 or PP.H3. What is the
-correct interpretation?**
+**Fine-mapping nominated both coding and noncoding candidates at established LDL-C loci. After
+comparing the LDL-C associations with molecular QTLs across the available tissues and assays, which
+mechanistic conclusion was best supported?**
 
-- A. These genes are not causal for LDL cholesterol.
-- B. The colocalization failed and the run should be discarded.
-- C. The molecular QTL is not associated in the tissue/assay tested, so there is no QTL signal to colocalize with — a power/tissue-context limitation, not evidence against the gene.
-- D. PP.H1 means the two signals share a causal variant.
+- A. HMGCR and PCSK9 were consistent with shared LDL-C and molecular-QTL signals, whereas the APOB
+  LDL-C association was better explained by a distinct coding mechanism than by the tested exon-QTL.
+- B. Every established LDL-C gene colocalized with a liver expression QTL, indicating one common
+  liver-expression mechanism across all loci.
+- C. Failure to colocalize LDLR and NPC1L1 demonstrated that these genes do not causally influence
+  LDL-C.
+- D. All regional overlaps between LDL-C and molecular QTLs represented the same causal variant.
 
-*Answer: **C.** PP.H1 is the posterior for "association in the GWAS only, none in the QTL dataset."
-It arises when the molecular QTL simply is not detected in the tissue or assay available — a
-limitation of QTL power and tissue coverage (recall no liver dataset fine-maps any of these genes),
-not a statement that the gene is not causal. LDLR is the definitive counter-example: it is the
-canonical LDL-clearance receptor and unquestionably causal, yet it does not colocalize here because
-its expression QTL is not associated in the tested tissue. This is why a colocalization null must be
-read as "no evidence in this molecular layer," never as "the gene is not causal" (A), a failed run
-(B), or a shared signal (D, which is PP.H4).*
+*Answer: **A.** The analysis supports locus-specific mechanisms rather than one universal route.
+HMGCR and PCSK9 provide evidence that the LDL-C and molecular-QTL associations can share a causal
+signal, while APOB favors distinct GWAS and exon-QTL signals and also carries an independently
+fine-mapped missense candidate. Thus, proximity to a molecular QTL is not sufficient to assign
+mediation, and lack of colocalization in an available tissue does not exclude a known effector gene.*
 
 # Mendelian randomization: causal effect of LDL-C on CAD
 
@@ -842,13 +867,14 @@ its own cis instruments.*
 
 # Limitations
 
-- **Out-of-sample LD.** Fine-mapping and distance-clumping use a 1000G EUR reference rather than
+- **Out-of-sample LD.** Fine-mapping use a 1000G EUR reference rather than
   in-sample LD; SuSiE credible sets may be miscalibrated (flagged per locus by the kriging
   diagnostic). This is the single most important caveat and the main methodological divergence
   from the reference paper, which had in-sample UKBB LD.
 - **Distance-only locus definition.** With no genotype panel provided at Step 3, independent loci
   are defined by a ±1 Mb distance rule rather than the paper's r²≥0.05 LD merge; a very strong
-  signal can bleed past the window and be split into apparent multiple loci (see the Step-3 MCQ).
+  signal can bleed past the window and be split into apparent multiple loci, as discussed in the
+  Step-3 limitations.
 - **Fine-mapping scoped to LDL effector loci.** Step 4 fine-maps the 11 canonical LDL effector
   loci (a hypothesis-driven subset), not genome-wide — chosen so out-of-sample-LD behaviour can be
   inspected locus by locus.
@@ -866,4 +892,5 @@ its own cis instruments.*
 - **cis-MR pleiotropy is weakly powered at small loci.** MR-Egger is the directional-pleiotropy
   check, but with 5–10 instruments (NPC1L1, HMGCR) its intercept test has low power — a nominal
   intercept there is a flag to note, not grounds to overturn the IVW estimate.
+
 
