@@ -112,53 +112,10 @@ def meta_inputs(wildcards):
 # =========================================================
 rule all:
     input:
-        # Step 1 meta + concordance + validation-vs-published
-        expand("results/meta/{metab}.meta.tsv.gz",      metab=METABOLITES),
-        expand("results/meta/{metab}.concordance.png",  metab=METABOLITES),
-        expand("results/meta/{metab}.validation.png",   metab=METABOLITES),
-        expand("results/meta/{metab}.validation.tsv",   metab=METABOLITES),
-        # Step 2 LDSC — 3 datasets x LDSC_METABOLITES (paper replication)
-        expand("results/ldsc/{metab}.{dataset}.h2.log", metab=LDSC_METABOLITES, dataset=DATASETS),
-        "results/ldsc/h2.tsv",
-        "results/ldsc/rg_between_biobanks.tsv",   # Analysis A: 3 datasets, per trait
-        "results/ldsc/rg_between_traits.tsv",     # Analysis B: traits within each dataset
-        "results/ldsc/h2_barplot.png",
-        "results/ldsc/rg_between_biobanks.png",
-        "results/ldsc/rg_between_traits.png",
-        # Step 3 lead variants + Manhattan (fine-mapping trait only — matches the
-        # report scope; lead-calling for the other 3 traits is a one-off if wanted:
-        #   snakemake --cores 4 results/loci/{BCAA,Glucose,Lactate}.lead.tsv)
-        expand("results/loci/{metab}.lead.tsv",      metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/loci/{metab}.manhattan.png", metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/loci/{metab}.maf_effect.png", metab=config["ld_prep"]["finemap_metabolites"]),
-        # Step 4a LD-matrix prep (only the traits configured for fine-mapping)
-        expand("results/ld/{metab}.loci.tsv",        metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/ld/{metab}.ld_manifest.tsv", metab=config["ld_prep"]["finemap_metabolites"]),
-        # Step 4c fine-mapping (SuSiE) — traits configured for fine-mapping
-        expand("results/finemap/{metab}.finemap.tsv",            metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/finemap/{metab}.cs_summary.tsv",         metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/finemap/{metab}.cs_summary.filtered.tsv",metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/finemap/{metab}.susie_qc.tsv",           metab=config["ld_prep"]["finemap_metabolites"]),
-        # Step 4d annotation (VEP missense) — traits configured for fine-mapping
-        expand("results/finemap/{metab}.annot.tsv",          metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/finemap/{metab}.annot.missense.tsv", metab=config["ld_prep"]["finemap_metabolites"]),
-        # Step 4e report figures
-        expand("results/finemap/{metab}.finemap_summary.png",     metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/finemap/{metab}.consequence_summary.png", metab=config["ld_prep"]["finemap_metabolites"]),
-        # Step 5 colocalisation — one row per metabolite in coloc_metabolites (each
-        # needs a config/coloc_targets.<METAB>.tsv). Self-bridging rules, no --use-conda.
-        expand("results/coloc/{metab}.eqtl_coverage.best.tsv", metab=COLOC_METABOLITES),
-        expand("results/coloc/{metab}.coloc.tsv",              metab=COLOC_METABOLITES),
-        expand("results/coloc/{metab}.coloc.best.tsv",         metab=COLOC_METABOLITES),
-        expand("results/coloc/{metab}.coloc_overview.png",     metab=COLOC_METABOLITES),
-        # Step 6 genome-wide MR + Step 7 cis-MR (exposure x outcome; CAD provisioned)
-        expand("results/mr/{metab}.{outcome}.gwmr.tsv",   metab=MR_METABOLITES, outcome=MR_OUTCOMES),
-        expand("results/mr/{metab}.{outcome}.scatter.png", metab=MR_METABOLITES, outcome=MR_OUTCOMES),
-        expand("results/mr/{metab}.{outcome}.cismr.tsv",  metab=MR_METABOLITES, outcome=MR_OUTCOMES),
-        expand("results/mr/{metab}.{outcome}.cismr.png",  metab=MR_METABOLITES, outcome=MR_OUTCOMES),
-        # Step 8 report — the terminal target: knits every table + plot above into
-        # one self-contained HTML. Listing it here makes a bare `snakemake` build the
-        # whole pipeline top-to-bottom and finish on the readable report.
+        # Terminal target: the report. All upstream dependencies (Steps 1–7) are
+        # resolved automatically by Snakemake's DAG — list them here only if you
+        # want them built as a side-effect. To build only the report (when upstream
+        # outputs already exist), just snakemake report/report.html.
         "report/report.html"
 
 # =========================================================
