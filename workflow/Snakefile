@@ -415,11 +415,14 @@ rule finemap_plots:
         rscript="workflow/scripts/04e_finemap_plots.R"
     output:
         summary="results/finemap/{metabolite}.finemap_summary.png",       # per-locus QC
-        consequence="results/finemap/{metabolite}.consequence_summary.png", # coding-vs-regulatory
-        # per-locus regional plots go to results/finemap/plots/{trait}.{gene}.regional.png
-        # (count varies with #loci, so declared as a directory output — same pattern as
-        # coloc_plots; this makes `results/finemap/plots` a real DAG node the report needs)
-        plotdir=directory("results/finemap/plots")
+        consequence="results/finemap/{metabolite}.consequence_summary.png" # coding-vs-regulatory
+        # NB: per-locus regional plots are ALSO written to results/finemap/plots/
+        # ({trait}.{gene}.regional.png), but that shared dir is NOT declared as an
+        # output: this rule is per-{metabolite}, and a wildcard-free directory() output
+        # alongside wildcarded PNG outputs is illegal in Snakemake ("not all outputs
+        # contain the same wildcards"). The report reaches those plots anyway because it
+        # depends on this rule's summary/consequence PNGs, which forces the rule to run
+        # and populate plots/ before the report renders.
     conda:  config["envs"]["r"]
     shell:
         "TRAIT={wildcards.metabolite} "
@@ -510,10 +513,12 @@ rule coloc_plots:
         targets=coloc_targets_file,
         rscript="workflow/scripts/05b_coloc_plots.R"
     output:
-        overview="results/coloc/{metabolite}.coloc_overview.png",
-        # per-gene regional plots go to results/coloc/plots/{trait}.{gene}.regional.png
-        # (count varies with #colocalizing genes, so declared as a directory output)
-        plotdir=directory("results/coloc/plots")
+        overview="results/coloc/{metabolite}.coloc_overview.png"
+        # NB: per-gene regional plots are ALSO written to results/coloc/plots/
+        # ({trait}.{gene}.regional.png), but that shared dir is NOT declared as an
+        # output — a wildcard-free directory() alongside the wildcarded overview PNG is
+        # illegal in Snakemake. The report reaches those plots because it depends on this
+        # rule's overview PNG, forcing the rule to run and populate plots/ first.
     params:
         r_env=config["envs"]["r"],
         api=config["ref"].get("eqtl_api_base", "https://www.ebi.ac.uk/eqtl/api/v2"),
@@ -630,13 +635,16 @@ rule report:
         annot=expand("results/finemap/{metab}.annot.tsv",              metab=REPORT_FINEMAP),
         finemap_summary=expand("results/finemap/{metab}.finemap_summary.png",     metab=REPORT_FINEMAP),
         consequence_summary=expand("results/finemap/{metab}.consequence_summary.png", metab=REPORT_FINEMAP),
-        # Per-locus regional plots — a directory side-output of rule finemap_plots
-        # (the count of plots varies with #loci, so it is not a declared DAG output).
-        finemap_plots="results/finemap/plots",
-        # Step 5 — colocalization overview + per-gene regional plots (coloc trait only)
+        # NB: the per-locus regional-plot DIRECTORIES (results/finemap/plots,
+        # results/coloc/plots) are NOT listed as inputs — they are undeclared side
+        # outputs of finemap_plots / coloc_plots (a wildcard-free directory() output
+        # can't coexist with those rules' wildcarded PNG outputs). Depending on the
+        # summary/overview PNGs already forces both rules to run and fill those dirs
+        # before the report renders; the dir PATHS are injected as constants in the
+        # run: block below so the Rmd's sm@input$finemap_plots/$coloc_plots resolve.
+        # Step 5 — colocalization overview (coloc trait only)
         coloc_best=expand("results/coloc/{metab}.coloc.best.tsv",   metab=COLOC_METABOLITES),
         coloc_overview=expand("results/coloc/{metab}.coloc_overview.png", metab=COLOC_METABOLITES),
-        coloc_plots="results/coloc/plots",
         # Step 6 — genome-wide IVW-MR (result + instruments + scatter)
         gwmr=expand("results/mr/{metab}.{outcome}.gwmr.tsv",         metab=MR_METABOLITES, outcome=MR_OUTCOMES),
         gwmr_scatter=expand("results/mr/{metab}.{outcome}.scatter.png", metab=MR_METABOLITES, outcome=MR_OUTCOMES),
@@ -664,10 +672,14 @@ rule report:
         # (never split a "path" string into characters).
         def as_list(v):
             return list(v) if isinstance(v, (list, tuple)) else [str(v)]
-        payload = {
-            "input":  {k: as_list(v) for k, v in input.items()},
-            "params": {"seed": params.seed},
-        }
+        inputs = {k: as_list(v) for k, v in input.items()}
+        # The regional-plot dirs aren't declared inputs (see note in input: block),
+        # but the Rmd reads them as sm@input$finemap_plots / $coloc_plots. Inject the
+        # constant paths here — the rules that fill them are already forced to run by
+        # the summary/overview PNG dependencies above.
+        inputs["finemap_plots"] = ["results/finemap/plots"]
+        inputs["coloc_plots"]   = ["results/coloc/plots"]
+        payload = {"input": inputs, "params": {"seed": params.seed}}
         with open("report/_report_inputs.json", "w") as fh:
             json.dump(payload, fh, indent=2)
         subprocess.run(
