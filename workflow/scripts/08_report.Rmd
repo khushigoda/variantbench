@@ -48,12 +48,24 @@ show_table <- function(dt, caption = NULL) {
 # fails. Instead we read each file (cwd = knit_root_dir = repo root, so file.exists
 # passes) and inline it as a base64 data-URI <img>, which needs no path resolution at
 # all. Chunks calling this MUST set results='asis' so the HTML is emitted raw.
-show_figs <- function(paths, width = "100%") {
+show_figs <- function(paths, cols = NULL) {
   paths <- paths[file.exists(paths) & file.info(paths)$size > 0]
-  for (p in paths) {
-    uri <- knitr::image_uri(p)   # -> "data:image/png;base64,...."
-    cat(sprintf('<img src="%s" style="max-width:%s;display:block;margin:0.5em auto;" alt="%s"/>\n\n',
-                uri, width, basename(p)))
+  if (!length(paths)) return(invisible(NULL))
+  # A single figure renders full-width & centred; multiple figures render in a
+  # responsive CSS grid (default 2 cols, auto-fit down to 1 on narrow screens) so
+  # groups like the 11 regional LocusZoom panels read as a compact gallery instead
+  # of an endless vertical scroll.
+  if (is.null(cols)) cols <- if (length(paths) > 1) 2 else 1
+  if (cols <= 1 || length(paths) == 1) {
+    for (p in paths)
+      cat(sprintf('<img src="%s" style="max-width:100%%;display:block;margin:0.5em auto;" alt="%s"/>\n\n',
+                  knitr::image_uri(p), basename(p)))
+  } else {
+    cat(sprintf('<div style="display:grid;grid-template-columns:repeat(%d,1fr);gap:0.6em;margin:0.5em 0;">\n', cols))
+    for (p in paths)
+      cat(sprintf('<img src="%s" style="width:100%%;height:auto;" alt="%s"/>\n',
+                  knitr::image_uri(p), basename(p)))
+    cat('</div>\n\n')
   }
   invisible(NULL)
 }
@@ -287,7 +299,7 @@ if (!is.null(annot_tab) && nrow(annot_tab) && "is_missense" %in% names(annot_tab
 
 ```{r finemap-fig, results='asis'}
 # Two cross-locus summary figures (per-locus QC counts; coding-vs-regulatory consequence mix).
-show_figs(c(sm@input$finemap_summary, sm@input$consequence_summary))
+show_figs(c(sm@input$finemap_summary, sm@input$consequence_summary), cols = 1)
 ```
 
 ```{r finemap-regional-fig, results='asis'}

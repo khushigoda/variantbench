@@ -97,8 +97,11 @@ regional_one <- function(g) {
   # stack the two tracks without patchwork: render to one column via a shared
   # facet on a long-melt is messy for differing y-scales, so save each track
   # and combine with grid layout via a 2-row viewport.
+  # 1300x975 @130dpi via cairo: still sharper than the ~900px the HTML displays,
+  # flattens RGBA->RGB and compresses better -> ~3-4x smaller than the old
+  # 2000x1500 RGBA (regional plots were 79% of the report's figure weight).
   png(file.path(PLOTDIR, sprintf("%s.%s.regional.png", TRAIT, g)),
-      width = 2000, height = 1500, res = 200)
+      width = 1300, height = 975, res = 130, type = "cairo", bg = "white")
   grid::grid.newpage()
   grid::pushViewport(grid::viewport(layout = grid::grid.layout(2, 1, heights = c(1.15, 1))))
   print(top, vp = grid::viewport(layout.pos.row = 1, layout.pos.col = 1))
