@@ -468,7 +468,7 @@ B. Increase common-variant GWAS sample size but exclude rare variants because th
 C. Combine larger common-variant association studies with targeted sequencing or functional follow-up of rarer, larger-effect variants.
 D. Treat allele frequency as irrelevant because common and rare lead variants showed comparable effect-size distributions.
 
-*Answer: **A.** The lead-variant distribution contains many common small-effect associations and a
+*Answer: **C.** The lead-variant distribution contains many common small-effect associations and a
 smaller group of rare, larger-effect associations. This supports a mixed genetic architecture rather
 than a purely common-variant or rare-variant model. Larger per-allele effects do not imply that rare
 variants explain most population variance, because their low frequencies sharply limit how many
@@ -723,30 +723,26 @@ mediation, and lack of colocalization in an available tissue does not exclude a 
 
 # Mendelian randomization: causal effect of LDL-C on CAD
 
-Colocalization (Step 5) links a trait locus to a molecular phenotype, but it does not tell us whether
-LDL-C *causes* coronary artery disease. Mendelian randomization (MR) answers that: it uses
-LDL-associated variants as instruments and asks whether the same alleles that raise LDL-C also raise
-CAD risk, in the direction and proportion a causal effect predicts. Because genotype is fixed at
-conception and randomized at meiosis, MR is largely immune to the confounding and reverse causation
-that undermine observational LDL–CAD associations — it is the closest thing the genome offers to a
-lifelong randomized trial of LDL lowering. Here MR serves two distinct purposes, addressed by two
-analyses.
+Colocalization (Step 5) tests whether an LDL-C association and a molecular-QTL association share a
+causal variant, but it does not establish whether LDL-C itself influences coronary artery disease.
+Mendelian randomization (MR) addresses this question by using LDL-C-associated variants as
+instruments and testing whether their effects on LDL-C are systematically related to their effects
+on CAD. Because genetic variants are assigned before disease onset, MR is less susceptible than
+observational analysis to reverse causation and conventional environmental confounding. Its causal
+interpretation nevertheless depends on the validity of the genetic instruments, particularly the
+assumption that they do not influence CAD through pathways independent of LDL-C.
 
-**Analysis and scope.** I run MR at two levels, both with the outcome fixed to CAD
-(the EUR-only meta-analysis of 181,522 cases, accession GCST90132314). First, **genome-wide MR** tests whether LDL-C *as a trait* is causal: the genome-wide
-significant lead variants (MAF > 1%, P < 5×10⁻⁸) are LD-pruned to an independent instrument set
-(greedy r² < 0.01, r² computed on the fly from the 1000G-EUR panel), harmonized to the CAD outcome
-allele by allele, and combined with a single **multiplicative random-effects inverse-variance-weighted
-(IVW)** estimator — one number, by design, not a battery of estimators. Second, **cis-MR
-(drug-target MR)** repeats the analysis one gene at a time using only instruments inside a ±200 kb
-window around each of the four canonical LDL drug-target genes — **PCSK9** (evolocumab/alirocumab),
-**HMGCR** (statins), **NPC1L1** (ezetimibe) and **LDLR** — so the estimate reflects perturbation of
-*that specific target*, the way a drug acting on it would. Per the reference manuscript, cis-MR uses
-IVW with `weights = "delta"` and adds **MR-Egger** as the directional-pleiotropy sensitivity check
-(its intercept tests whether the instruments have an average effect on CAD independent of LDL). The
-two analyses are complementary: genome-wide MR asks *is the trait causal*, cis-MR asks *is this
-druggable gene causal* — and the second is the question that predicts whether a drug against the
-target will work.
+**Analysis and scope.** MR is run at two levels, with the outcome fixed to the European-ancestry CAD
+GWAS (`GCST90132314`; 181,522 cases). **Genome-wide MR (Step 6)** tests the causal effect of LDL-C
+as a circulating trait. Genome-wide-significant lead variants with MAF >1% and
+\(P<5\times10^{-8}\) are greedily LD-pruned at \(r^2<0.01\) using the 1000G-EUR panel,
+harmonized to the CAD outcome, and combined using multiplicative random-effects
+inverse-variance-weighted MR. **cis-MR (Step 7)** evaluates LDL-C-associated variation within
+±200 kb of four nominated LDL-related genes: **PCSK9**, **HMGCR**, **NPC1L1**, and **LDLR**.
+The cis analysis uses multiplicative random-effects IVW with delta-method weights and MR-Egger as a
+directional-pleiotropy sensitivity analysis. Genome-wide MR therefore asks whether LDL-C as a trait
+influences CAD, whereas cis-MR asks whether evidence from a particular genomic region is consistent
+with an LDL-C-mediated effect on CAD.
 
 ```{r mr-gwmr-table}
 gwmr <- read_many(sm@input$gwmr)
@@ -768,6 +764,16 @@ cat("Per-variant effect on CAD (log-OR) against per-variant effect on LDL-C (SD)
 show_figs(sm@input$gwmr_scatter)
 ```
 
+```{r gwmr-fig, results='asis', fig.width=10, fig.height=6}
+gwmr_scatter <- file.path("results/mr", "LDL_C.CAD.scatter.png")
+gwmr_scatter_webp <- sub("\\.png$", ".webp", gwmr_scatter)
+gwmr_use <- ifelse(file.exists(gwmr_scatter_webp), gwmr_scatter_webp, gwmr_scatter)
+if (file.exists(gwmr_use)) {
+  cat("### Genome-wide MR: LDL-C → CAD\n")
+  cat("![](", gwmr_use, ")\n", sep="")
+}
+```
+
 **Genome-wide result — the positive control lands.** Across
 `r if (exists("gwmr") && !is.null(gwmr) && nrow(gwmr)) gwmr$nsnp[1] else "the"`
 independent instruments, genetically higher LDL-C causes substantially higher CAD risk:
@@ -775,12 +781,45 @@ independent instruments, genetically higher LDL-C causes substantially higher CA
 per 1-SD LDL-C
 (95% CI `r if (exists("gwmr") && !is.null(gwmr) && nrow(gwmr)) sprintf("%.2f–%.2f", gwmr$or_lo[1], gwmr$or_up[1]) else "—"`,
 P = `r if (exists("gwmr") && !is.null(gwmr) && nrow(gwmr)) signif(gwmr$pval[1], 3) else "—"`)**.
-This is exactly the result the biology demands, and it is the single most important sanity check on
-the whole pipeline: LDL-C is the textbook causal cardiovascular risk factor, and an MR that failed to
-recover a strong, tightly-bounded positive effect would signal a harmonization or instrument-selection
-bug upstream. The magnitude sits squarely in the range of the published large-scale LDL→CAD MR
-literature (~1.5 per SD), so harmonization and IVW are behaving correctly on real data, not merely
-returning a non-zero number.
+
+The direction and magnitude are consistent with the established causal relationship between higher
+LDL-C and coronary disease, making this an important positive-control result for the pipeline. The
+analysis supports a **trait-level** causal interpretation under the MR assumptions. It does not
+identify which LDL-regulating gene mediates the effect, establish that every LDL-lowering mechanism
+has the same effect on CAD, or independently exclude horizontal pleiotropy. Because the scoped
+replication uses the manuscript's primary genome-wide IVW estimator without additional sensitivity
+estimators, the result should be interpreted as the prespecified IVW estimate rather than as a
+comprehensive pleiotropy-robust analysis.
+
+
+## MCQ 
+
+**A reviewer asks which biological claim is directly supported by the genome-wide MR analysis, without importing conclusions from colocalization or cis-MR. Which answer is defensible?**
+
+A. Every intervention that lowers LDL-C will have the same clinical effect on CAD.
+B. The analysis excludes all forms of horizontal or correlated pleiotropy among the instruments.
+C. Genetic predisposition to higher circulating LDL-C is associated with increased CAD risk at the trait level, consistent with a causal effect.
+D. The genome-wide instruments identify which individual LDL-regulating gene should be pharmacologically targeted.
+
+*Answer:** C.**
+The genome-wide analysis used multiplicative random-effects IVW as its prespecified estimator and produced a positive LDL-C-to-CAD estimate. It supports the trait-level causal conclusion, but it was not designed to identify a specific target or comprehensively exclude pleiotropy.*
+
+---
+
+## Step 7 — Cis Mendelian randomization (drug-target validation)
+
+cis-MR complements the genome-wide analysis by restricting instruments to the genomic region around
+a nominated gene. Candidate instruments are selected from ±200 kb around the full gene body, must
+have MAF >1% and \(P<5\times10^{-8}\), and are greedily pruned at \(r^2<0.01\) using
+1000G-EUR LD. The four regions examined are **PCSK9**, **HMGCR**, **NPC1L1**, and **LDLR**.
+PCSK9, HMGCR, and NPC1L1 correspond to established pharmacological targets, whereas LDLR is included
+because of its central role in LDL clearance.
+
+A positive cis-MR estimate means that LDL-C-associated variation within the nominated region also
+predicts CAD risk. This is evidence consistent with the biological mechanism represented by that
+region, but it does not prove that every instrument acts exclusively through the named gene. Nearby
+variants may regulate multiple genes, residual LD may remain after pruning, and horizontal
+pleiotropy can still occur within a cis region.
 
 ```{r mr-cismr-table}
 cismr <- read_many(sm@input$cismr)
@@ -807,81 +846,6 @@ cat("Forest plot of the per-gene cis-MR IVW estimates (OR per 1-SD LDL-C, 95% CI
 show_figs(sm@input$cismr_forest)
 ```
 
-**cis-MR result — all four drug targets validate, and two are rescued from the coloc null.** Every
-one of the four canonical LDL drug-target genes shows a significant, positive causal effect on CAD:
-PCSK9 OR = 2.25 (2.02–2.51, P = 6.5×10⁻⁵⁰), LDLR OR = 2.02 (1.88–2.18, P = 9.6×10⁻⁷⁷), NPC1L1
-OR = 2.40 (1.91–3.01, P = 5.9×10⁻¹⁴), and HMGCR OR = 1.52 (1.36–1.70, P = 1.3×10⁻¹³). Because these
-are the molecular targets of the four main LDL-lowering drug classes, cis-MR recovering a causal
-effect at each is the drug-target analogue of the genome-wide positive control — the pipeline
-reproduces, from genetics alone, the mechanistic basis of statins, ezetimibe and the PCSK9
-inhibitors. The most valuable result is the interplay with Step 5: **LDLR and NPC1L1 did *not*
-colocalize** (both were GWAS-only, PP.H1 — their molecular QTLs were not associated in any tested
-tissue), yet cis-MR gives them overwhelming causal support (P = 9.6×10⁻⁷⁷ and 5.9×10⁻¹⁴). This is
-the textbook illustration of *why the two lines of evidence are run together*: a colocalization null
-is a tissue/power limitation, not evidence against a gene, and cis-MR — which needs only GWAS
-summary statistics, no molecular QTL — supplies the causal evidence coloc could not. MR-Egger shows
-no directional pleiotropy for PCSK9 (intercept P = 0.94) or LDLR (P = 0.28); HMGCR (P = 0.046) and
-NPC1L1 (P = 0.033) show nominal intercepts, but with only 10 and 5 instruments the Egger test is
-weakly powered and the intercepts are small — a flag to note, not a result to overturn the IVW on.
-
-**How this compares to the source manuscript.** The correspondence is again at the level of method
-and design, not identical counts. The manuscript embeds MR in its disease→trait→molecular-QTL
-framework and reports genome-wide MR plus cis (drug-target) MR at the effector loci; this replication
-reproduces both halves at the LDL locus with the manuscript's stated estimators — multiplicative
-random-effects IVW genome-wide, and IVW (`weights = "delta"`) with an MR-Egger sensitivity for the
-cis analysis. The genome-wide OR of 1.66/SD and the drug-target genes all validating in the causal
-direction reproduce the manuscript's headline MR conclusion that LDL-C is causal for CAD and that its
-canonical effector genes are bona fide drug targets, from an independent implementation on the
-replication meta-analysis.
-
-## Step 6 — Genome-wide Mendelian randomization
-
-**Question: Does LDL-C causally influence CAD (or T2D)? What does a significant genome-wide MR
-estimate tell us, and why is this design different from observational associations?**
-
-Genome-wide MR tests whether variation in a **trait** (LDL-C) that is *genetically instrumented* causally
-influences an **outcome** (CAD or T2D). All variants genome-wide that pass pruning (r²<0.001 against
-1000G-EUR) are used as instruments, provided they reach genome-wide significance in the exposure GWAS.
-The multiplicative random-effects IVW estimator is applied, which inflates standard errors under
-heterogeneity — a form of robustness against unmeasured pleiotropy (variants affecting outcome through
-pathways other than LDL). For LDL-C → CAD, we observe **OR 1.66 per SD increase in LDL-C** — evidence
-that elevated LDL-C is causal for coronary disease, not merely associated. This is the first key
-validation that LDL is a bona fide causal target for therapeutic intervention.
-
-```{r gwmr-fig, results='asis', fig.width=10, fig.height=6}
-gwmr_scatter <- file.path("results/mr", "LDL_C.CAD.scatter.png")
-gwmr_scatter_webp <- sub("\\.png$", ".webp", gwmr_scatter)
-gwmr_use <- ifelse(file.exists(gwmr_scatter_webp), gwmr_scatter_webp, gwmr_scatter)
-if (file.exists(gwmr_use)) {
-  cat("### Genome-wide MR: LDL-C → CAD\n")
-  cat("![](", gwmr_use, ")\n", sep="")
-}
-```
-
----
-
-## Step 7 — Cis Mendelian randomization (drug-target validation)
-
-**Question: What does cis-MR establish that genome-wide MR cannot, and why is it the more robust design
-for validating individual drug targets?**
-
-Cis-MR is the natural complement to genome-wide MR: instead of aggregating instruments from across the
-genome to test the trait, we restrict instruments to a ±200 kb window around a *single* candidate drug-target
-gene. The logic is that variants in the cis window of (say) PCSK9 act on LDL-C primarily through PCSK9's
-effect, not through thousands of independent loci. This design is therefore largely **immune to genome-wide
-horizontal pleiotropy** by construction — we are testing the causal effect of *that gene's* contribution
-to LDL, which is exactly the intervention a drug targeting it would perform.
-
-The critical insight is that cis-MR and genome-wide MR answer *different* questions:
-- **Genome-wide MR**: Does the *trait* (LDL-C) cause disease?
-- **cis-MR**: Does *this gene's* effect on the trait cause disease?
-
-For drug development, cis-MR is the more relevant question. Two of our findings highlight this:
-**LDLR and NPC1L1 failed to colocalize with eQTLs** in Step 5 (their molecular QTLs were not
-associated in any tissue tested), yet both show **overwhelming causal support in cis-MR**
-(LDLR P = 9.6×10⁻⁷⁷, NPC1L1 P = 5.9×10⁻¹⁴). This illustrates why the two lines of evidence are run
-together: a colocalization null reflects tissue/power limitation, not evidence against a gene. cis-MR —
-which needs only GWAS summary statistics, no molecular QTL — supplies the causal evidence coloc could not.
 
 ```{r cismr-fig, results='asis', fig.width=10, fig.height=8}
 cismr_plot <- file.path("results/mr", "LDL_C.CAD.cismr.png")
@@ -897,26 +861,47 @@ if (file.exists(cismr_use)) {
 }
 ```
 
-**MCQ — Why cis-MR, not just genome-wide MR?**
+**cis-MR result.** All four regions produced positive cis-IVW estimates with confidence intervals
+above the null: PCSK9 OR = 2.25 (2.02–2.51, \(P=6.5\times10^{-50}\)), LDLR OR = 2.02
+(1.88–2.18, \(P=9.6\times10^{-77}\)), NPC1L1 OR = 2.40 (1.91–3.01,
+\(P=5.9\times10^{-14}\)), and HMGCR OR = 1.52 (1.36–1.70,
+\(P=1.3\times10^{-13}\)). The consistent direction across the four regions supports the expected
+relationship between LDL-C-raising genetic effects and higher CAD risk.
 
-**Genome-wide MR shows LDL-C is causal for CAD (OR 1.66/SD). We nonetheless also run cis-MR
-restricted to a ±200 kb window around each drug-target gene. What does the cis analysis establish
-that the genome-wide analysis cannot, and why is it the more robust design for a drug-target
-question?**
+The MR-Egger sensitivity results were not identical across regions. Directional pleiotropy was not
+detected for PCSK9 (intercept \(P=0.94\)) or LDLR (\(P=0.28\)). HMGCR
+(\(P=0.046\)) and NPC1L1 (\(P=0.033\)) showed nominal Egger-intercept evidence, so their IVW
+estimates require more cautious interpretation. The limited number of instruments in some regions
+also makes the Egger analysis imprecise; this limitation increases uncertainty but does not justify
+dismissing a nominal intercept result.
 
-- A. cis-MR is simply a smaller, lower-powered version of genome-wide MR that confirms the same trait-level result at less cost.
-- B. cis-MR estimates the effect of perturbing *one specific gene's* contribution to LDL-C — i.e. the mechanism a drug against that target would act through — and by confining instruments to the cis region it is largely immune to the horizontal pleiotropy that can bias genome-wide instruments.
-- C. cis-MR proves the drug is safe and effective in patients.
-- D. A significant genome-wide MR guarantees every LDL-lowering drug target will also be significant in cis-MR, so the cis step is redundant.
+The cis-MR and colocalization analyses provide complementary, but non-interchangeable, evidence.
+HMGCR and PCSK9 showed evidence that the LDL-C and available molecular-QTL associations share a
+causal variant. LDLR and NPC1L1 did not colocalize with the molecular QTLs tested in Step 5, although
+their regional cis-IVW estimates were positive. The cis-MR findings therefore show that
+LDL-C-associated variation in those regions predicts CAD risk, while the specific molecular
+phenotype mediating the regional association remains unresolved in the available QTL datasets.
 
-*Answer: **B.** The two analyses answer complementary but distinct questions. Genome-wide MR tests
-whether variation in the **trait** is causal; cis-MR tests whether variation in a **specific gene's** effect
-on the trait is causal — the mechanism a drug would target. By restricting instruments to the cis region,
-cis-MR is robust to genome-wide pleiotropy by construction. It is **not** merely a downsized version (A):
-the two are designed for different purposes, and cis-MR's power and insight are starkest at **LDLR and
-NPC1L1**, which did not colocalize with eQTLs yet are overwhelmingly causal in cis. cis-MR does not
-prove clinical efficacy in patients (C) — that requires trials — and a causal trait does not guarantee
-every candidate target validates (D); each gene must be tested on its own cis instruments.*
+**How this compares to the source manuscript.** The replication follows the manuscript's primary MR
+design: multiplicative random-effects IVW for genome-wide MR, and delta-weighted IVW with MR-Egger
+for cis-MR. The positive genome-wide LDL-C → CAD result and the positive regional estimates at
+established LDL-related loci agree with the manuscript's central biological conclusion. Important
+methodological differences remain. Instrument pruning here uses an out-of-sample 1000G-EUR reference
+rather than in-sample UKBB LD, and this replication does not implement the manuscript's additional
+cis-MR methods such as MRLocus, MR-link-2, or MR-PCA. The agreement with established LDL biology is
+therefore encouraging, but the regional interpretations remain subject to residual LD, pleiotropy,
+and uncertainty in assigning a cis-region association to one specific gene.
+
+**MCQ — cis-Mendelian Randomization**
+
+**The four LDL-related regions produced positive cis-IVW estimates, but their supporting evidence was not equally coherent.Suppose a target is carried forward only when it satisfies all three analysis criteria: a positive cis-IVW association with CAD, molecular-QTL colocalization at PP.H4 ≥ 0.80, and no nominal MR-Egger intercept signal at P<0.05.Based on the combined cis-MR, MR-Egger and colocalization results, which locus presents the strongest internally consistent target-level story in this analysis?**
+
+A. NPC1L1, because its positive IVW result was accompanied by both molecular-QTL colocalization and no indication of directional pleiotropy.
+B. HMGCR, because it showed no evidence of directional pleiotropy and was the only region with a shared molecular-QTL signal.
+C. LDLR, because a positive regional IVW result alone establishes that all instruments act exclusively through LDLR.
+D. PCSK9, because it combined a positive regional IVW estimate, no detected directional-pleiotropy signal and supporting molecular-QTL colocalization.
+
+*Answer: **D.** PCSK9 had positive regional MR support, an MR-Egger intercept that did not indicate directional pleiotropy, and a shared LDL-C–molecular-QTL signal. HMGCR also colocalized but had nominal Egger-intercept evidence; LDLR lacked the molecular-QTL support; and NPC1L1 had both a colocalization null and a nominal Egger-intercept signal.*
 
 # Limitations
 
