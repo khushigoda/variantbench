@@ -74,6 +74,28 @@ defaults still fire:
 
 Signed statistic = `BETA` (matches the authors).
 
+**Step 3 — lead variants: done for LDL_C.** Dual frequency-dependent genome-wide-significance
+threshold (common/low-freq MAF>0.1% → P<5e-8; rare → P<6.25e-10, the paper's Bonferroni),
+lowest-P lead within a 2 Mb locus. **321 independent lead loci** on the LDL meta, plus a
+Manhattan figure. Distance-only clumping (no genotype panel provided for the paper's r²≥0.05
+merge). Outputs: `results/loci/LDL_C.{lead.tsv, manhattan.png}`. Method vs. authors:
+`docs/03_leadvars_vs_authors.md`.
+
+**Step 4 — fine-mapping: done for the 11 LDL effector loci.** `susie_rss` z-mode, L=10,
+`estimate_residual_variance=FALSE` (out-of-sample 1000G EUR LD, per the brief),
+purity `min_abs_corr=0.5`, 95%/99% coverage, with an `estimate_s_rss` (kriging) LD-mismatch
+diagnostic per locus. **144 credible sets (111 pass the genome-wide-sig filter)** across
+PCSK9/APOB/ABCG5-8/HMGCR/NPC1L1/LPL/ABCA1/APOA5/CETP/LDLR/APOE. VEP annotation recovers the
+textbook coding variants — **PCSK9 R46L and APOE C130R each at PIP=1**, ABCG5 R198Q (damaging)
+at PIP=1. Outputs: `results/finemap/LDL_C.{finemap.tsv, cs_summary[.filtered].tsv, susie_qc.tsv,
+annot[.missense].tsv}` + 11 regional plots and two summary figures. Method vs. authors:
+`docs/04_finemap_vs_authors.md`.
+
+**Step 5 — colocalization with molecular QTLs: in design.** Trait–QTL coloc of the LDL
+fine-mapping signals against the eQTL Catalogue, sweeping all molecular-QTL quantification
+methods (ge/exon/tx/txrev/leafcutter/microarray/aptamer), tissue chosen data-driven per gene.
+Retrieval + engine architecture under review (see `docs/05_coloc_design.md`).
+
 ## Run
 
 Three conda envs, nested: you activate only the **driver** env (`variantbench`, which holds
@@ -118,17 +140,17 @@ snakemake --use-conda --cores 6 \
 
 ## Steps
 
-**Active now (Steps 0–2 — the current submission scope):**
+**Done (Steps 0–4):**
 0. split      — per-chromosome split of each raw `.tsv.gz` (`scripts/00_split_by_chr.sh`);
                 streams the meta on an 8 GB box without an OOM. Transient (`temp()`).
 1. meta        — fixed-effect IVW meta of EstBB + UKBB_EUR, genome-wide; validate vs published meta
 2. ldsc        — SNP-h² + genetic correlation across the four traits (LDSC, Python-2 env)
+3. lead_variants — dual-threshold genome-wide-significant loci + Manhattan (LDL_C: 321 loci)
+4. finemap     — SuSiE credible sets + VEP missense annotation at 11 LDL effector loci
+                 (out-of-sample 1000G EUR LD, kriging QC; PCSK9 R46L & APOE C130R at PIP=1)
 
-**Deferred (Steps 3–8 — scaffolded on disk, rules commented out at the foot of the Snakefile;
-restore by re-enabling the disabled `config` keys, see the header comment there):**
-3. lead_variants — genome-wide-significant loci + Manhattan
-4. finemap     — SuSiE credible sets + missense/splice annotation (out-of-sample LD!)
-5. coloc       — coloc.abf with eQTL Catalogue at a locus
+**In design (Step 5) / scaffolded (Steps 6–8 — rules commented at the foot of the Snakefile):**
+5. coloc       — trait–QTL coloc against the eQTL Catalogue, all molecular-QTL quant methods
 6. gwmr        — genome-wide MR: metabolite → CAD/T2D (IVW, Egger, median)
 7. cismr       — cis (drug-target) MR restricted to effector-gene windows
 8. report      — Rmd → self-contained HTML

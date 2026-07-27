@@ -99,9 +99,11 @@ rule all:
         "results/ldsc/h2_barplot.png",
         "results/ldsc/rg_between_biobanks.png",
         "results/ldsc/rg_between_traits.png",
-        # Step 3 lead variants + Manhattan (per trait)
-        expand("results/loci/{metab}.lead.tsv",      metab=METABOLITES),
-        expand("results/loci/{metab}.manhattan.png", metab=METABOLITES),
+        # Step 3 lead variants + Manhattan (fine-mapping trait only — matches the
+        # report scope; lead-calling for the other 3 traits is a one-off if wanted:
+        #   snakemake --cores 4 results/loci/{BCAA,Glucose,Lactate}.lead.tsv)
+        expand("results/loci/{metab}.lead.tsv",      metab=config["ld_prep"]["finemap_metabolites"]),
+        expand("results/loci/{metab}.manhattan.png", metab=config["ld_prep"]["finemap_metabolites"]),
         # Step 4a LD-matrix prep (only the traits configured for fine-mapping)
         expand("results/ld/{metab}.loci.tsv",        metab=config["ld_prep"]["finemap_metabolites"]),
         expand("results/ld/{metab}.ld_manifest.tsv", metab=config["ld_prep"]["finemap_metabolites"]),
@@ -115,7 +117,13 @@ rule all:
         expand("results/finemap/{metab}.annot.missense.tsv", metab=config["ld_prep"]["finemap_metabolites"]),
         # Step 4e report figures
         expand("results/finemap/{metab}.finemap_summary.png",     metab=config["ld_prep"]["finemap_metabolites"]),
-        expand("results/finemap/{metab}.consequence_summary.png", metab=config["ld_prep"]["finemap_metabolites"])
+        expand("results/finemap/{metab}.consequence_summary.png", metab=config["ld_prep"]["finemap_metabolites"]),
+        # Step 5 colocalisation — DISABLED in rule all until the coloc architecture is
+        # locked and the step is run. Re-enable these three lines (and drop the trailing
+        # comma above) once results/coloc/ is populated.
+        # expand("results/coloc/{metab}.eqtl_coverage.best.tsv", metab=config["ld_prep"]["finemap_metabolites"]),
+        # expand("results/coloc/{metab}.coloc.tsv",              metab=config["ld_prep"]["finemap_metabolites"]),
+        # expand("results/coloc/{metab}.coloc.best.tsv",         metab=config["ld_prep"]["finemap_metabolites"])
 
 # =========================================================
 # Step 1 — meta-analysis (EstBB + UKBB_EUR -> meta), reads RAW files directly
@@ -379,21 +387,61 @@ rule finemap_plots:
         "FMDIR=results/finemap LDDIR=results/ld OUTDIR=results/finemap "
         "Rscript workflow/scripts/04e_finemap_plots.R"
 #
-# # =========================================================
-# # Step 5 — colocalization with molecular QTLs (coloc.abf)
-# # =========================================================
-# rule coloc:
-#     input:  meta="results/meta/{metabolite}.meta.tsv.gz"
-#     output:
-#         tsv="results/coloc/{metabolite}.coloc.tsv",
-#         plot="results/coloc/{metabolite}.regional.png"   # metabolite vs eQTL overlay (§6)
-#     params:
-#         seed=config["params"]["seed"],
-#         eqtl=config["ref"]["eqtl_dataset"],
-#         priors=config["params"]["coloc_priors"],
-#         locus=lambda w: config["metabolites"][w.metabolite]["coloc_locus"]
-#     conda:  config["envs"]["r"]
-#     script: "scripts/05_coloc.R"
+# =========================================================
+# Step 5 — colocalization with molecular QTLs (coloc.bf_bf)
+# =========================================================
+# TISSUE CHOICE IS DATA-DRIVEN. Liver is biologically obvious for LDL, but GTEx
+# liver (n=208) is the only liver dataset in the eQTL Catalogue and fine-maps
+# none of our 12 effector genes. So, as the authors (gpu-coloc across the whole
+# Catalogue) and Open Targets do, we scan every gene-level dataset and coloc each
+# gene against the best-powered dataset that actually fine-maps it.
+#
+# 5a  coverage_scan: read the small credible_sets.tsv.gz of ALL ge datasets,
+#     find which fine-map each target gene, write {trait}.eqtl_coverage.best.tsv
+#     (gene -> dataset,study_id,tissue,n). Light (no lBF matrices), stdlib python.
+rule coverage_scan:
+    input:
+        targets=config["ld_prep"]["coloc_targets"],
+        pyscript="workflow/scripts/05_coverage_scan.py"
+    output:
+        coverage="results/coloc/{metabolite}.eqtl_coverage.tsv",
+        best="results/coloc/{metabolite}.eqtl_coverage.best.tsv"
+    conda:  config["envs"]["main"]
+    shell:
+        "TRAIT={wildcards.metabolite} "
+        "TARGETS={input.targets} OUTDIR=results/coloc "
+        "python workflow/scripts/05_coverage_scan.py"
+
+# 5b  coloc: reuse the persisted 04c SuSiE fits (never re-fit); for each distinct
+#     dataset in best.tsv, stream+filter its ~500 MB lBF matrix once (files are
+#     NOT tabix-indexed; EBI advises full download over many tabix pokes) and
+#     cache the small subset; then coloc.bf_bf per gene. DAG hook mirrors
+#     annotate: loci.tsv stands in for the per-locus .susie.rds/z.tsv/gwas.tsv.
+rule coloc:
+    input:
+        loci="results/ld/{metabolite}.loci.tsv",
+        finemap="results/finemap/{metabolite}.finemap.tsv",   # proxy: 04c wrote the .susie.rds
+        best="results/coloc/{metabolite}.eqtl_coverage.best.tsv",
+        targets=config["ld_prep"]["coloc_targets"],
+        rscript="workflow/scripts/05a_coloc.R"
+    output:
+        allpairs="results/coloc/{metabolite}.coloc.tsv",       # every signal-pair tested
+        best="results/coloc/{metabolite}.coloc.best.tsv"       # best pair per gene + coloc call
+        # results/coloc/{metabolite}.{dataset}.lbf.tsv.gz also written (cached eQTL subsets; gitignored)
+    params:
+        ftp=config["ref"]["eqtl_ftp_base"],
+        p1=config["ld_prep"]["coloc_priors"]["p1"],
+        p2=config["ld_prep"]["coloc_priors"]["p2"],
+        p12=config["ld_prep"]["coloc_priors"]["p12"],
+        pp4=config["ld_prep"].get("coloc_pp4_min", 0.8)
+    conda:  config["envs"]["r"]
+    shell:
+        "TRAIT={wildcards.metabolite} "
+        "FMDIR=results/finemap LDDIR=results/ld OUTDIR=results/coloc "
+        "TARGETS={input.targets} BEST={input.best} "
+        "EQTL_FTP_BASE={params.ftp} "
+        "P1={params.p1} P2={params.p2} P12={params.p12} PP4_MIN={params.pp4} "
+        "Rscript workflow/scripts/05a_coloc.R"
 #
 # # =========================================================
 # # Step 6 — genome-wide MR (metabolite -> outcome)
@@ -432,34 +480,41 @@ rule finemap_plots:
 #     conda:  config["envs"]["r"]
 #     script: "scripts/07_cismr.R"
 #
-# # =========================================================
-# # Step 8 — report (Rmd -> self-contained HTML)
-# # =========================================================
-# rule report:
-#     input:
-#         meta=expand("results/meta/{metab}.meta.tsv.gz", metab=METABOLITES),
-#         validation_tsv=expand("results/meta/{metab}.validation.tsv", metab=METABOLITES),
-#         validation=expand("results/meta/{metab}.validation.png", metab=METABOLITES),
-#         concordance=expand("results/meta/{metab}.concordance.png", metab=METABOLITES),
-#         h2=expand("results/ldsc/{metab}.{dataset}.h2.log", metab=METABOLITES, dataset=DATASETS),
-#         h2_tsv="results/ldsc/h2.tsv",
-#         rg_bb="results/ldsc/rg_between_biobanks.tsv",
-#         rg_tr="results/ldsc/rg_between_traits.tsv",
-#         h2_plot="results/ldsc/h2_barplot.png",
-#         rg_bb_plot="results/ldsc/rg_between_biobanks.png",
-#         rg_tr_plot="results/ldsc/rg_between_traits.png",
-#         lead=expand("results/loci/{metab}.lead.tsv", metab=METABOLITES),
-#         manhattan=expand("results/loci/{metab}.manhattan.png", metab=METABOLITES),
-#         annot=expand("results/finemap/{metab}.annot.tsv", metab=METABOLITES),
-#         finemap_plots=expand("results/finemap/{metab}_plots", metab=METABOLITES),
-#         coloc=expand("results/coloc/{metab}.coloc.tsv", metab=METABOLITES),
-#         coloc_plot=expand("results/coloc/{metab}.regional.png", metab=METABOLITES),
-#         mr=expand("results/mr/{metab}.{outcome}.gwmr.tsv", metab=METABOLITES, outcome=OUTCOMES),
-#         mr_scatter=expand("results/mr/{metab}.{outcome}.scatter.png", metab=METABOLITES, outcome=OUTCOMES),
-#         mr_loo=expand("results/mr/{metab}.{outcome}.loo.png", metab=METABOLITES, outcome=OUTCOMES),
-#         cismr=expand("results/cismr/{metab}.{outcome}.cismr.tsv", metab=METABOLITES, outcome=OUTCOMES)
-#     output: "report/report.html"
-#     params: seed=config["params"]["seed"]
-#     conda:  config["envs"]["r"]
-#     script: "scripts/08_report.Rmd"
-#
+# =========================================================
+# Step 8 — report (Rmd -> self-contained HTML)
+# =========================================================
+# Scoped to COMPLETED steps only. Steps 1-2 run across all four traits; Steps 3-4
+# are shown for the fine-mapping trait(s) (LDL_C) — the only traits with lead/
+# fine-map results on disk. Coloc/MR (Steps 5-7) are omitted until those rules run;
+# the Rmd's per-step MCQ layout means each step is added back with its own question.
+# Input keys below match exactly the sm@input$... names referenced by 08_report.Rmd.
+REPORT_FINEMAP = config["ld_prep"]["finemap_metabolites"]   # e.g. [LDL_C]
+
+rule report:
+    input:
+        # Step 1 — meta validation (all traits)
+        validation_tsv=expand("results/meta/{metab}.validation.tsv", metab=METABOLITES),
+        validation=expand("results/meta/{metab}.validation.png",     metab=METABOLITES),
+        concordance=expand("results/meta/{metab}.concordance.png",   metab=METABOLITES),
+        # Step 2 — LDSC (precomputed tables + plots, single source of truth)
+        h2=expand("results/ldsc/{metab}.{dataset}.h2.log", metab=LDSC_METABOLITES, dataset=DATASETS),
+        h2_tsv="results/ldsc/h2.tsv",
+        rg_bb="results/ldsc/rg_between_biobanks.tsv",
+        rg_tr="results/ldsc/rg_between_traits.tsv",
+        h2_plot="results/ldsc/h2_barplot.png",
+        rg_bb_plot="results/ldsc/rg_between_biobanks.png",
+        rg_tr_plot="results/ldsc/rg_between_traits.png",
+        # Step 3 — lead variants + Manhattan (fine-mapping trait only)
+        lead=expand("results/loci/{metab}.lead.tsv",         metab=REPORT_FINEMAP),
+        manhattan=expand("results/loci/{metab}.manhattan.png", metab=REPORT_FINEMAP),
+        # Step 4 — fine-mapping annotation + summary figures (fine-mapping trait only)
+        annot=expand("results/finemap/{metab}.annot.tsv",              metab=REPORT_FINEMAP),
+        finemap_summary=expand("results/finemap/{metab}.finemap_summary.png",     metab=REPORT_FINEMAP),
+        consequence_summary=expand("results/finemap/{metab}.consequence_summary.png", metab=REPORT_FINEMAP),
+        # Per-locus regional plots — a directory side-output of rule finemap_plots
+        # (the count of plots varies with #loci, so it is not a declared DAG output).
+        finemap_plots="results/finemap/plots"
+    output: "report/report.html"
+    params: seed=config["params"]["seed"]
+    conda:  config["envs"]["r"]
+    script: "scripts/08_report.Rmd"
